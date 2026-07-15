@@ -36,8 +36,9 @@ Reference for `skills/*.yml` and `resources.yml`. Generated from `SkillConfigPar
 skills:
   spark:
     cooldown: 3000
-    targeter: single
-    range: 15
+    targeter:
+      type: single
+      range: 15
     effects:
       - type: damage
         amount: 8
@@ -53,8 +54,9 @@ Required: `cooldown`, `targeter`, `effects`. Everything else is optional.
 ```yaml
 fireball:
   cooldown: 4000
-  targeter: single
-  range: 18
+  targeter:
+    type: single
+    range: 18
   cost: { type: mana, amount: 10 }
   effects:
     - type: damage
@@ -68,9 +70,10 @@ fireball:
 ```yaml
 shockwave:
   cooldown: 8000
-  targeter: radius
-  radius: 6
-  include_self: false
+  targeter:
+    type: radius
+    radius: 6
+    include_self: false
   cost: { type: mana, amount: 20 }
   effects:
     - type: damage
@@ -83,7 +86,8 @@ shockwave:
 ```yaml
 mend:
   cooldown: 10000
-  targeter: self
+  targeter:
+    type: self
   cost: { type: mana, amount: 15 }
   effects:
     - type: heal
@@ -97,7 +101,8 @@ mend:
 ```yaml
 haste_potion:
   cooldown: 15000
-  targeter: self
+  targeter:
+    type: self
   cost: { type: stamina, amount: 10 }
   effects:
     - type: potion
@@ -110,8 +115,9 @@ haste_potion:
 ```yaml
 poison_bolt:
   cooldown: 6000
-  targeter: single
-  range: 15
+  targeter:
+    type: single
+    range: 15
   cost: { type: mana, amount: 12 }
   effects:
     - type: damage
@@ -124,17 +130,19 @@ poison_bolt:
 ```yaml
 bolt:
   cooldown: 5000
-  targeter: self
+  targeter:
+    type: self
   cost: { type: mana, amount: 10 }
   effects:
     - type: projectile
       particle: FLAME
       speed: 20
       max_distance: 20
-      hit_radius: 1.0
-      effects:
-        - type: damage
-          amount: 10
+      hit:
+        radius: 1.0
+        effects:
+          - type: damage
+            amount: 10
 ```
 
 ---
@@ -167,11 +175,12 @@ VSCode: install `redhat.vscode-yaml`. Gives autocomplete, hover docs, error squi
 skills:
   my_skill:
     cooldown: 5000              # ms, default 0
-    targeter: self               # self | single | radius | cone - default self
-    range: 20                    # single/cone only
-    radius: 5                    # radius only
-    angle: 90                    # cone only
-    include_self: false          # radius only
+    targeter:
+      type: self                # self | single | radius | cone - default self
+      range: 20                 # single/cone only
+      radius: 5                 # radius only
+      angle: 90                 # cone only
+      include_self: false       # radius only
     cast_time: 0                 # ms, default 0
     interruptible: true          # default true
     min_health_percent: 0.0      # optional
@@ -192,9 +201,9 @@ skills:
 
 ## Targeters
 
-Set via `targeter:`. Determines `context.getTargets()` for the skill's top-level `effects:`. Nested lists (`on_hit`, `on_start`/`on_tick`/`on_expire`, sequence steps) get their own targets.
+Set via `targeter:`. Determines `context.getTargets()` for the skill's top-level `effects:`. Nested lists (`effects` under `hit`, `on_start`/`on_tick`/`on_expire`, sequence steps) get their own targets.
 
-| `targeter:` | Extra fields | Targets |
+| `targeter.type` | Extra fields | Targets |
 |---|---|---|
 | `self` (default) | - | Caster only |
 | `single` | `range` (20) | Entity in crosshair, up to `range` blocks. Empty = fizzle |
@@ -286,7 +295,6 @@ Spawns at each target's location +1 block up, (0.3,0.3,0.3) spread. One-shot onl
 Pushes targets away from caster (never the caster itself), min 0.3 upward lift.
 
 ### status effect
-
 ```yaml
 # reference
 - type: status
@@ -294,11 +302,12 @@ Pushes targets away from caster (never the caster itself), min 0.3 upward lift.
 
 # inline
 - type: status
-  behavior: dash          # dash | frozen | omit for cosmetic
+  behavior:
+    type: dash          # dash | frozen | omit for cosmetic
+    distance: 8              # dash only
+    horizontal_only: true    # dash only
+    disable_gravity: true    # dash only
   duration_ticks: 6
-  distance: 8              # dash only
-  horizontal_only: true    # dash only
-  disable_gravity: true    # dash only
   tick_interval_ticks: 1
   refreshable: true
   on_start: [...]
@@ -313,15 +322,16 @@ See [Statuses](#statuses). Applies to `context.getTargets()`.
   particle: FLAME              # optional trail
   speed: 15                     # blocks/sec, default 15
   max_distance: 20              # default 20
-  hit_radius: 1.0                # default 1.0
-  pierce: 1                      # default 1
   gravity: false                 # default false
   collide_with_blocks: true      # default true
-  effects:                       # required
-    - type: damage
-      amount: 12
+  hit:
+    radius: 1.0                # default 1.0
+    pierce: 1                  # default 1
+    effects:                   # required
+      - type: damage
+        amount: 12
 ```
-Simulated point, moves from caster's eye along look direction. `pierce` = max entities hit before stopping. `effects` can nest any effect type, including another `projectile` or `shape`.
+Simulated point, moves from caster's eye along look direction. `hit.pierce` = max entities hit before stopping. `hit.effects` can nest any effect type, including another `projectile` or `shape`.
 
 ### summon
 ```yaml
@@ -331,15 +341,18 @@ Simulated point, moves from caster's eye along look direction. `pierce` = max en
   spawn_radius: 1.5              # default 1.5
   name: "Skeletal Thrall"        # optional
   health: 20                     # optional
-  main_hand: BOW                 # optional
-  helmet: WITHER_SKELETON_SKULL  # optional
+  equipment:
+    main_hand: BOW                 # optional
+    helmet: WITHER_SKELETON_SKULL  # optional
   duration_ticks: -1             # default -1 = no timer
-  max_active: 4                  # default 0 = uncapped
-  on_cap_exceeded: refuse        # refuse (default) | dismiss_oldest
-  aggro_radius: 12               # default 12, 0 = no auto-aggro
-  follow_radius: 10              # default 10
-  move_speed: 1.0                # default 1.0
-  ai_interval_ticks: 10          # default 10
+  cap:
+    max: 4                         # default 0 = uncapped
+    on_exceeded: refuse            # refuse (default) | dismiss_oldest
+  ai:
+    aggro_radius: 12               # default 12, 0 = no auto-aggro
+    follow_radius: 10              # default 10
+    move_speed: 1.0                # default 1.0
+    interval_ticks: 10             # default 10
   on_summon:                     # fires once per minion
     - type: particle
       particle: SOUL
@@ -353,15 +366,15 @@ Real Bukkit mobs with vanilla AI, not simulated. Plugin-added behavior:
   (any owner) - a target-event veto plus a direct damage block cover the
   owner/sibling case in both directions (a summon can't hurt its owner, and
   the owner can't hurt their own summon either). Cross-owner summon-vs-summon
-  targeting is additionally self-corrected every `ai_interval_ticks`: each
+  targeting is additionally self-corrected every `ai.interval_ticks`: each
   minion re-validates whatever target it currently has, not just brand new
   picks, since vanilla "hurt by" revenge AI can set a target through a path
   that skips the Bukkit target-event entirely on some mobs/versions - so a
   bad target only sticks for one tick at most instead of indefinitely.
-- Idle summons auto-target the nearest valid `LivingEntity` (excludes players, armor stands, its own owner, and any tracked summon regardless of owner) within `aggro_radius` every `ai_interval_ticks`.
-- Idle summons instantly assist when the owner damages a non-summon, non-player entity within `aggro_radius`.
-- Idle summons beyond `follow_radius` path back to the caster at `move_speed`.
-- `max_active` checked pre-spawn. `refuse` fails the cast; `dismiss_oldest` frees a slot.
+- Idle summons auto-target the nearest valid `LivingEntity` (excludes players, armor stands, its own owner, and any tracked summon regardless of owner) within `ai.aggro_radius` every `ai.interval_ticks`.
+- Idle summons instantly assist when the owner damages a non-summon, non-player entity within `ai.aggro_radius`.
+- Idle summons beyond `ai.follow_radius` path back to the caster at `ai.move_speed`.
+- `cap.max` checked pre-spawn. `refuse` fails the cast; `dismiss_oldest` frees a slot.
 - `duration_ticks: -1` = lives until death/dismiss. Positive value = auto-despawn (with `POOF` particle) after that many ticks.
 - Deaths are auto-cleaned from tracking via `EntityDeathEvent`.
 
@@ -389,81 +402,84 @@ See `skills/necromancer.yml`.
 See `skills/tank.yml` (`shield_slam`, `provoke`).
 
 ### shape
-
+ 
 Particle visual + optional hitbox. One or more animated **layers**, positioned by an **anchor**, optionally **traveling**, optionally **hitting**.
-
-```yaml
-- type: shape
-  anchor: self               # self | self_fixed | target | cursor | cursor_locked - default self
-  cursor_range: 20            # cursor/cursor_locked only, default 20
-  duration_ticks: 40          # default 40
-  interval_ticks: 2           # render rate, default 2
-  offset: { x: 0, y: 1.5, z: 1 }   # local (right/up/forward) constant nudge from anchor
-  travel:
-    speed: 10
-    max_distance: 15
-    gravity: false
-    collide_with_blocks: true
-  hit_radius: 1.2              # 0/omit = no hit detection
-  hit_area: points             # points | disk | sphere - default points
-  hit_height: 2.0              # disk only
-  hit_once: true               # default true
-  hit_interval_ticks: 2        # default = interval_ticks
-  include_self: false
-  visible_to: everyone         # everyone | caster_only - default everyone
-  disarm_after_hit: false      # default false
-  debug_hitbox: false
-  debug_hitbox_points: 8
-  on_hit:
-    - type: damage
-      amount: 10
-  layers:                      # required
-    - shape: ring
-      ...
-```
-
-#### Anchors
-
-| `anchor:` | Behavior |
-|---|---|
-| `self` (default) | Follows caster every tick |
-| `self_fixed` | Snapshot at effect start |
-| `target` | Follows `context.getTargets()[0]`, falls back to caster |
-| `cursor` | Raycasts caster's aim once, at effect start |
-| `cursor_locked` | Same as `cursor`, but cached on `SkillContext` — reused by other `cursor_locked` shapes in the same cast |
-
-`self`/`target` update live; `self_fixed`/`cursor`/`cursor_locked` resolve once (travel/offset/layer animation still apply on top).
-
-#### offset
-
-Constant local-space (right/up/forward, relative to caster's current facing) nudge on the anchor point, applied every tick. Distinct from a layer's `start_offset`/`end_offset` (animated, world-space, per-layer).
-
-#### travel
-
-Moves the whole shape forward over time. Cancels early on block collision (if `collide_with_blocks`) or at `max_distance`.
-
-#### Hit detection
-
-| Field | Notes |
-|---|---|
-| `hit_radius` | `<= 0`/omit disables hit detection |
-| `hit_area: points` | Tests a sphere of `hit_radius` around every rendered point |
-| `hit_area: disk`/`sphere` | Tests a flat disk (`hit_radius`, `hit_height`) or full sphere centered on the effect |
-| `hit_once` | Default true — one hit per entity per effect lifetime |
-| `hit_interval_ticks` | Independent clock from `interval_ticks` |
-| `include_self` | Default false — caster excluded from hit-scans |
-| `disarm_after_hit` | Default false — true ends the whole effect on first hit |
-| `on_hit` | Runs against exactly what was hit that scan, fresh `SkillContext` |
-
-#### Traps (caster-only visibility)
-
-`visible_to: caster_only` sends particles to the caster only (hitbox unaffected, fully server-side). Combined with long `duration_ticks` + `disarm_after_hit: true` = single-use hidden trap. `disarm_after_hit: false` = reusable trap.
-
-- `on_hit` effects always broadcast normally regardless of `visible_to`.
-- `debug_hitbox` always broadcasts to everyone.
-- `visible_to: caster_only` falls back to normal broadcast for non-`Player` casters.
-
-See `skills/traps.yml` (`hunters_snare`, `venom_dart_trap`).
+ 
+ ```yaml
+ - type: shape
+   anchor: self               # self | self_fixed | target | cursor | cursor_locked - default self
+   cursor_range: 20            # cursor/cursor_locked only, default 20
+   duration_ticks: 40          # default 40
+   interval_ticks: 2           # render rate, default 2
+   offset: { x: 0, y: 1.5, z: 1 }   # local (right/up/forward) constant nudge from anchor
+   travel:
+     speed: 10
+     max_distance: 15
+     gravity: false
+     collide_with_blocks: true
+   hit:
+     radius: 1.2              # 0/omit = no hit detection
+     area: points             # points | disk | sphere - default points
+     height: 2.0              # disk only
+     once: true               # default true
+     interval_ticks: 2        # default = interval_ticks
+     include_self: false
+     disarm: false            # default false
+     effects:
+       - type: damage
+         amount: 10
+   visible_to: everyone         # everyone | caster_only - default everyone
+   debug_hitbox: false
+   debug_hitbox_points: 8
+   layers:                      # required
+     - shape: ring
+       ...
+ ```
+ 
+ #### Anchors
+ 
+ | `anchor:` | Behavior |
+ |---|---|
+ | `self` (default) | Follows caster every tick |
+ | `self_fixed` | Snapshot at effect start |
+ | `target` | Follows `context.getTargets()[0]`, falls back to caster |
+ | `cursor` | Raycasts caster's aim once, at effect start |
+ | `cursor_locked` | Same as `cursor`, but cached on `SkillContext` — reused by other `cursor_locked` shapes in the same cast |
+ 
+ `self`/`target` update live; `self_fixed`/`cursor`/`cursor_locked` resolve once (travel/offset/layer animation still apply on top).
+ 
+ #### offset
+ 
+ Constant local-space (right/up/forward, relative to caster's current facing) nudge on the anchor point, applied every tick. Distinct from a layer's `start_offset`/`end_offset` (animated, world-space, per-layer).
+ 
+ #### travel
+ 
+ Moves the whole shape forward over time. Cancels early on block collision (if `collide_with_blocks`) or at `max_distance`.
+ 
+ #### Hit detection
+ 
+ Defined under the `hit:` block.
+ 
+ | Field | Notes |
+ |---|---|
+ | `radius` | `<= 0`/omit disables hit detection |
+ | `area` | `points` (default) tests sphere of `radius` around points. `disk`/`sphere` tests flat disk or full sphere. |
+ | `height` | disk only - vertical tolerance above/below center |
+ | `once` | Default true — one hit per entity per effect lifetime |
+ | `interval_ticks` | Independent clock from rendering `interval_ticks` |
+ | `include_self` | Default false — caster excluded from hit-scans |
+ | `disarm` | Default false — true ends the whole shape effect on first hit |
+ | `effects` | Nested list of effects to run against what was hit |
+ 
+ #### Traps (caster-only visibility)
+ 
+ `visible_to: caster_only` sends particles to the caster only (hitbox unaffected, fully server-side). Combined with long `duration_ticks` + `hit.disarm: true` = single-use hidden trap. `hit.disarm: false` = reusable trap.
+ 
+ - `effects` under `hit:` always broadcast normally regardless of `visible_to`.
+ - `debug_hitbox` always broadcasts to everyone.
+ - `visible_to: caster_only` falls back to normal broadcast for non-`Player` casters.
+ 
+ See `skills/traps.yml` (`hunters_snare`, `venom_dart_trap`).
 
 #### Layers
 
@@ -600,7 +616,8 @@ Chains stages of effects with delays between them.
 ```yaml
 statuses:
   frozen:
-    behavior: frozen             # dash | frozen | omit for cosmetic
+    behavior:
+      type: frozen             # dash | frozen | omit for cosmetic
     duration_ticks: 60            # -1 = indefinite
     tick_interval_ticks: 5
     refreshable: true              # default true
@@ -611,7 +628,7 @@ statuses:
 
 Effects in `on_start`/`on_tick`/`on_expire` run with the affected entity as both caster and sole target.
 
-| `behavior:` | Extra fields | Effect |
+| `behavior.type` | Extra fields (in `behavior:` map) | Effect |
 |---|---|---|
 | `dash` | `distance` (6), `horizontal_only` (true), `disable_gravity` (true) | Constant-speed shove for `duration_ticks`, covering `distance` blocks. Direction: held movement key (players) → existing velocity → look direction. Uses vanilla collision. |
 | `frozen` | - | Zeroes velocity every tick |
