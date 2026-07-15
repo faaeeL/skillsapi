@@ -227,8 +227,43 @@ public class ShapeEffect implements SkillEffect {
                     }
                 }
 
+                // Full 3D facing basis (right/up/forward), not flattened to
+                // horizontal - a facing-relative shape (line/arc/cone/
+                // vertical-ring) needs to point exactly where the caster is
+                // looking, including straight up/down, not just their yaw.
+                // Live for SELF only (see the fixedBasis comment above) -
+                // every other anchor reuses the one captured at cast time.
+                // Computed up here (before the collision check) so the
+                // offset can be applied to the point that's actually
+                // block-tested below, not just to the point that gets
+                // rendered - otherwise a self_fixed anchor sitting at the
+                // caster's feet with e.g. `offset: {y: 1.5}` would have its
+                // *visual* sitting safely at chest height while the
+                // *collision test* still ran against the un-lifted,
+                // ground-level point, cancelling on a downward-aimed cast
+                // almost immediately despite the rendered arc never coming
+                // near the floor.
+                Vector right, up, forward;
+                if (anchor == Anchor.SELF) {
+                    Vector[] basis = computeBasis(caster.getEyeLocation().getDirection());
+                    right = basis[0];
+                    up = basis[1];
+                    forward = basis[2];
+                } else {
+                    right = fixedBasis[0];
+                    up = fixedBasis[1];
+                    forward = fixedBasis[2];
+                }
+
+                Location offsetPoint = center.clone();
+                if (offsetX != 0 || offsetY != 0 || offsetZ != 0) {
+                    offsetPoint.add(right.clone().multiply(offsetX));
+                    offsetPoint.add(up.clone().multiply(offsetY));
+                    offsetPoint.add(forward.clone().multiply(offsetZ));
+                }
+
                 if (travelVelocityPerTick != null) {
-                    if (travel.collideWithBlocks() && center.getBlock().getType().isSolid()) {
+                    if (travel.collideWithBlocks() && offsetPoint.getBlock().getType().isSolid()) {
                         cancel();
                         return;
                     }
@@ -243,26 +278,10 @@ public class ShapeEffect implements SkillEffect {
                     }
                 }
 
-                // Full 3D facing basis (right/up/forward), not flattened to
-                // horizontal - a facing-relative shape (line/arc/cone/
-                // vertical-ring) needs to point exactly where the caster is
-                // looking, including straight up/down, not just their yaw.
-                // Live for SELF only (see the fixedBasis comment above) -
-                // every other anchor reuses the one captured at cast time.
-                Vector right, up, forward;
-                if (anchor == Anchor.SELF) {
-                    Vector[] basis = computeBasis(caster.getEyeLocation().getDirection());
-                    right = basis[0];
-                    up = basis[1];
-                    forward = basis[2];
-                } else {
-                    right = fixedBasis[0];
-                    up = fixedBasis[1];
-                    forward = fixedBasis[2];
-                }
-
                 // Apply the configured offset on a *clone* - center itself must stay
                 // the pure anchor/travel point, or the offset would stack every tick.
+                // Recomputed against center's post-travel position (offsetPoint above
+                // was only this tick's pre-travel collision probe).
                 Location renderCenter = center.clone();
                 if (offsetX != 0 || offsetY != 0 || offsetZ != 0) {
                     renderCenter.add(right.clone().multiply(offsetX));
