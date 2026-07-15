@@ -5,6 +5,7 @@ import com.example.skillsapi.shape.ShapeLayer;
 import com.example.skillsapi.skill.SkillContext;
 import com.example.skillsapi.skill.SkillEffect;
 import org.bukkit.Color;
+import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.LivingEntity;
@@ -272,10 +273,21 @@ public class ShapeEffect implements SkillEffect {
                     // actual segment this tick is about to move through
                     // catches anything the path crosses, not just where it
                     // happens to land.
+                    //
+                    // ignorePassableBlocks is explicitly false here: the
+                    // 3-arg World#rayTraceBlocks overload defaults that to
+                    // true, which treats anything without a full-cube
+                    // collision shape - stairs, slabs, fences, walls,
+                    // carpets, snow layers, etc. - as transparent to the
+                    // ray and skips it entirely, even though it's visually
+                    // and gameplay-wise solid. Passing false here means the
+                    // travel actually stops at those too, not just plain
+                    // full blocks.
                     double stepLength = travelVelocityPerTick.length();
                     if (travel.collideWithBlocks() && stepLength > 0) {
                         var hit = offsetPoint.getWorld().rayTraceBlocks(
-                                offsetPoint, travelVelocityPerTick.clone().normalize(), stepLength);
+                                offsetPoint, travelVelocityPerTick.clone().normalize(), stepLength,
+                                FluidCollisionMode.NEVER, false);
                         if (hit != null) {
                             cancel();
                             return;
@@ -305,11 +317,23 @@ public class ShapeEffect implements SkillEffect {
 
                 double elapsedSeconds = elapsedTicks / 20.0;
 
+                boolean checkShapeCollision = travel != null && travel.collideWithBlocks();
+
                 boolean shouldRender = renderAccumulator >= intervalTicks;
                 if (shouldRender) {
                     renderAccumulator -= intervalTicks;
 
-                    boolean collectPoints = hitRadius > 0 && hitArea == HitArea.POINTS;
+                    // Points get collected (not just rendered) whenever a
+                    // POINTS-mode hitbox needs them for its own hit-scan, or
+                    // whenever block collision is on - the center-path
+                    // raytrace above only catches the anchor's own travel
+                    // path tunneling through a block; it says nothing about
+                    // a *wide* layer (e.g. a 3-block-radius arc) whose
+                    // outer points can poke into a block well off to the
+                    // side of that path, which the center alone would never
+                    // detect. Checking the actual rendered points here
+                    // catches that spread instead of just the anchor.
+                    boolean collectPoints = (hitRadius > 0 && hitArea == HitArea.POINTS) || checkShapeCollision;
                     List<Location> allPoints = collectPoints ? new ArrayList<>() : null;
                     List<Player> recipients = (visibleTo == Visibility.CASTER_ONLY && caster instanceof Player p)
                             ? List.of(p) : null;
@@ -318,7 +342,16 @@ public class ShapeEffect implements SkillEffect {
                         layer.spawnParticles(points, recipients);
                         if (allPoints != null) allPoints.addAll(points);
                     }
-                    if (collectPoints) lastRenderedPoints = allPoints;
+                    if (hitRadius > 0 && hitArea == HitArea.POINTS) lastRenderedPoints = allPoints;
+
+                    if (checkShapeCollision && allPoints != null) {
+                        for (Location point : allPoints) {
+                            if (point.getBlock().getType().isSolid()) {
+                                cancel();
+                                return;
+                            }
+                        }
+                    }
                 }
 
                 boolean shouldHitScan = hitRadius > 0 && hitScanAccumulator >= hitIntervalTicks;
