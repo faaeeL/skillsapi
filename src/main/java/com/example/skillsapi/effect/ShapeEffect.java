@@ -263,9 +263,23 @@ public class ShapeEffect implements SkillEffect {
                 }
 
                 if (travelVelocityPerTick != null) {
-                    if (travel.collideWithBlocks() && offsetPoint.getBlock().getType().isSolid()) {
-                        cancel();
-                        return;
+                    // A single point-sample (offsetPoint.getBlock().isSolid())
+                    // only catches a block if a sample happens to land inside
+                    // it - at typical travel speeds (e.g. 0.5 blocks/tick @
+                    // 10 blocks/sec) the point can easily step clean over a
+                    // thin wall, or even a full block at a shallow angle,
+                    // without ever sampling from inside it. Raytracing the
+                    // actual segment this tick is about to move through
+                    // catches anything the path crosses, not just where it
+                    // happens to land.
+                    double stepLength = travelVelocityPerTick.length();
+                    if (travel.collideWithBlocks() && stepLength > 0) {
+                        var hit = offsetPoint.getWorld().rayTraceBlocks(
+                                offsetPoint, travelVelocityPerTick.clone().normalize(), stepLength);
+                        if (hit != null) {
+                            cancel();
+                            return;
+                        }
                     }
                     center.add(travelVelocityPerTick);
                     travelled += travelVelocityPerTick.length();
