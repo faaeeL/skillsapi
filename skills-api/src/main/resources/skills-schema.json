@@ -1,0 +1,929 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SkillsAPI config",
+  "description": "Schema for skills/*.yml files (and the legacy root skills.yml). Point your editor at this via a '# yaml-language-server: $schema=...' comment on the first line of the file - see USAGE.md.",
+  "type": "object",
+  "properties": {
+    "statuses": {
+      "type": "object",
+      "description": "Named, reusable status definitions, referenced by id from any file's skills via `type: status, status: <id>`. Optional - a status only used once can be defined inline where it's used instead.",
+      "additionalProperties": {
+        "$ref": "#/definitions/status"
+      }
+    },
+    "skills": {
+      "type": "object",
+      "description": "Every skill defined in this file, keyed by id.",
+      "additionalProperties": {
+        "$ref": "#/definitions/skill"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "status": {
+      "type": "object",
+      "description": "A persistent, over-time definition (dash, frozen, or purely cosmetic) - same fields whether it's a named top-level entry (referenced by id from any skill) or an inline `type: status` block.",
+      "properties": {
+        "behavior": {
+          "type": "string",
+          "enum": [
+            "dash",
+            "frozen"
+          ],
+          "description": "Java-side continuous logic. Omit entirely for a purely cosmetic status (on_start/on_tick/on_expire hooks only, no gameplay lock)."
+        },
+        "duration_ticks": {
+          "type": "integer",
+          "default": 100,
+          "description": "-1 = indefinite, lasts until explicitly removed."
+        },
+        "tick_interval_ticks": {
+          "type": "integer",
+          "default": 4,
+          "description": "How often on_tick fires."
+        },
+        "refreshable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Re-applying while already active restarts it."
+        },
+        "distance": {
+          "type": "number",
+          "default": 6,
+          "description": "behavior: dash only."
+        },
+        "horizontal_only": {
+          "type": "boolean",
+          "default": true,
+          "description": "behavior: dash only."
+        },
+        "disable_gravity": {
+          "type": "boolean",
+          "default": true,
+          "description": "behavior: dash only."
+        },
+        "on_start": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "Fires once when applied. Runs with the affected entity as both caster and sole target."
+        },
+        "on_tick": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "Fires every tick_interval_ticks while active."
+        },
+        "on_expire": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "Fires once when it ends (naturally, or removed early)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "skill": {
+      "type": "object",
+      "description": "One skill, keyed by id (the id used in /cast <id> and /skillsapi bind <id>).",
+      "required": [
+        "effects"
+      ],
+      "properties": {
+        "cooldown": {
+          "type": "integer",
+          "default": 0,
+          "description": "Milliseconds, per-caster, tracked in memory."
+        },
+        "targeter": {
+          "type": "string",
+          "enum": [
+            "self",
+            "single",
+            "radius",
+            "cone"
+          ],
+          "default": "self",
+          "description": "Decides context.getTargets() for this skill's own top-level effects: only - nested lists (on_hit, on_start/on_tick/on_expire, sequence steps) get their own targets independently."
+        },
+        "range": {
+          "type": "number",
+          "description": "targeter: single (default 20) or cone (default 5) only."
+        },
+        "radius": {
+          "type": "number",
+          "default": 5,
+          "description": "targeter: radius only."
+        },
+        "angle": {
+          "type": "number",
+          "default": 90,
+          "description": "targeter: cone only, degrees."
+        },
+        "include_self": {
+          "type": "boolean",
+          "default": false,
+          "description": "targeter: radius only."
+        },
+        "cast_time": {
+          "type": "integer",
+          "default": 0,
+          "description": "Milliseconds. 0 (default) = resolves instantly, identical to calling Skill.cast() directly."
+        },
+        "interruptible": {
+          "type": "boolean",
+          "default": true,
+          "description": "Only matters if cast_time > 0 - can taking damage cancel the windup?"
+        },
+        "min_health_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Optional - caster must be at/above this fraction of max health, or the cast fails silently."
+        },
+        "cost": {
+          "type": "object",
+          "description": "Adds BOTH a condition (fails the cast if the caster doesn't have enough) and an effect that spends it (inserted first, so it's only ever spent on a cast that actually goes through).",
+          "required": [
+            "type",
+            "amount"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Must match a key under resources.yml's resources: section."
+            },
+            "amount": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "telegraph": {
+          "type": "object",
+          "description": "Optional looping particle/sound cue during a cast_time windup.",
+          "properties": {
+            "particle": {
+              "type": "string",
+              "description": "Any org.bukkit.Particle name."
+            },
+            "particle_count": {
+              "type": "integer",
+              "default": 6
+            },
+            "sound": {
+              "type": "string",
+              "description": "Old enum-style Sound name (ENTITY_X_Y) - auto-converted to the modern registry key."
+            },
+            "interval_ticks": {
+              "type": "integer",
+              "default": 4
+            },
+            "on_start": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/effect"
+              },
+              "description": "Fires ONCE, right when the windup begins - runs with targets = [caster] only."
+            }
+          },
+          "additionalProperties": false
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "Required - what the skill actually does once it resolves."
+        }
+      },
+      "additionalProperties": false
+    },
+    "effect": {
+      "type": "object",
+      "description": "One thing that happens: damage, heal, a particle burst, a status, a traveling projectile, a custom shape, or a chained sequence of other effects. Every field below is optional except `type` - which ones matter depends on which `type` you pick; see USAGE.md's Effects section for the exact per-type field list.",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "damage",
+            "heal",
+            "particle",
+            "potion",
+            "knockback",
+            "status",
+            "projectile",
+            "shape",
+            "sequence",
+            "summon",
+            "dismiss_summons",
+            "taunt"
+          ]
+        },
+        "amount": {
+          "type": "number",
+          "default": 1,
+          "description": "damage/heal: the amount. taunt: threat added (default 1000 - deliberately far above a single hit's damage-based threat, so a taunt reliably overrides it)."
+        },
+        "particle": {
+          "type": "string",
+          "description": "particle/projectile effect only - any org.bukkit.Particle name. Optional on projectile (omit for an invisible one)."
+        },
+        "count": {
+          "type": "integer",
+          "description": "particle effect: default 10. summon effect: default 1 - how many mobs to spawn per cast."
+        },
+        "color": {
+          "type": "object",
+          "description": "0-255 RGB. Only takes effect when particle/particle: DUST - silently ignored for every other particle type. (particle effect)",
+          "properties": {
+            "r": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "g": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "additionalProperties": false
+        },
+        "dust_size": {
+          "type": "number",
+          "default": 1.0,
+          "description": "particle effect only, DUST particle only."
+        },
+        "effect": {
+          "type": "string",
+          "description": "potion effect only - any org.bukkit.potion.PotionEffectType name, e.g. SLOWNESS, SPEED, STRENGTH."
+        },
+        "duration_ticks": {
+          "type": "integer",
+          "description": "potion effect: default 100. status effect (inline definition): -1 = indefinite. summon effect: default -1 = lives until it dies or is dismissed; a positive value despawns it after that many ticks."
+        },
+        "amplifier": {
+          "type": "integer",
+          "default": 0,
+          "description": "potion effect only. 0 = potion level I."
+        },
+        "strength": {
+          "type": "number",
+          "default": 1,
+          "description": "knockback effect only."
+        },
+        "status": {
+          "type": "string",
+          "description": "status effect only - id of a definition under the top-level statuses: section. Mutually exclusive with `behavior` (that means an inline definition instead)."
+        },
+        "behavior": {
+          "type": "string",
+          "enum": [
+            "dash",
+            "frozen"
+          ],
+          "description": "status effect only, inline definition. Presence of this field is what tells the parser 'this is inline', not a reference. Omit entirely for a purely cosmetic inline status."
+        },
+        "tick_interval_ticks": {
+          "type": "integer",
+          "default": 4,
+          "description": "status effect (inline) only - how often on_tick fires."
+        },
+        "refreshable": {
+          "type": "boolean",
+          "default": true,
+          "description": "status effect (inline) only - re-applying while already active restarts it."
+        },
+        "distance": {
+          "type": "number",
+          "default": 6,
+          "description": "status effect, behavior: dash only."
+        },
+        "horizontal_only": {
+          "type": "boolean",
+          "default": true,
+          "description": "status effect, behavior: dash only."
+        },
+        "disable_gravity": {
+          "type": "boolean",
+          "default": true,
+          "description": "status effect, behavior: dash only."
+        },
+        "on_start": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "status effect (inline) only - fires once when applied."
+        },
+        "on_tick": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "status effect (inline) only - fires every tick_interval_ticks while active."
+        },
+        "on_expire": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "status effect (inline) only - fires once when it ends."
+        },
+        "speed": {
+          "type": "number",
+          "default": 15,
+          "description": "projectile effect only - blocks/second."
+        },
+        "max_distance": {
+          "type": "number",
+          "default": 20,
+          "description": "projectile effect only."
+        },
+        "hit_radius": {
+          "type": "number",
+          "default": 1.0,
+          "description": "projectile effect: default 1.0. shape effect: omit or 0 disables hit detection entirely."
+        },
+        "pierce": {
+          "type": "integer",
+          "default": 1,
+          "description": "projectile effect only - how many entities it can hit before stopping."
+        },
+        "gravity": {
+          "type": "boolean",
+          "default": false,
+          "description": "projectile effect only."
+        },
+        "collide_with_blocks": {
+          "type": "boolean",
+          "default": true,
+          "description": "projectile effect only."
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "projectile effect only (required) - fires on whatever it hits. Can nest anything, including another projectile/shape/status."
+        },
+        "anchor": {
+          "type": "string",
+          "enum": [
+            "self",
+            "self_fixed",
+            "target",
+            "cursor",
+            "cursor_locked"
+          ],
+          "default": "self",
+          "description": "shape effect only. self/target follow their reference point every render tick; self_fixed/cursor/cursor_locked resolve once and hold still (aside from travel/offset/layer animation)."
+        },
+        "cursor_range": {
+          "type": "number",
+          "default": 20,
+          "description": "shape effect only, anchor: cursor/cursor_locked only."
+        },
+        "interval_ticks": {
+          "type": "integer",
+          "default": 2,
+          "description": "shape effect: how often it re-renders. telegraph: how often the loop fires."
+        },
+        "offset": {
+          "type": "object",
+          "description": "shape effect only - constant, local-space (right/up/forward relative to the caster's current facing) nudge from the anchor point, recomputed every tick.",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "travel": {
+          "type": "object",
+          "description": "Makes a shape move forward over time like a thrown object, independent of anchor. Pair with anchor: self_fixed/cursor/cursor_locked, not self/target (those re-snap the center every tick and fight the travel velocity).",
+          "properties": {
+            "speed": {
+              "type": "number",
+              "description": "Blocks/second."
+            },
+            "max_distance": {
+              "type": "number"
+            },
+            "gravity": {
+              "type": "boolean",
+              "default": false
+            },
+            "collide_with_blocks": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "hit_area": {
+          "type": "string",
+          "enum": [
+            "points",
+            "disk",
+            "sphere"
+          ],
+          "default": "points",
+          "description": "shape effect only. points = sphere-test every rendered particle point. disk/sphere = test one flat disk or full sphere centered on the effect instead."
+        },
+        "hit_height": {
+          "type": "number",
+          "description": "shape effect only, hit_area: disk only - vertical tolerance above/below center."
+        },
+        "hit_once": {
+          "type": "boolean",
+          "default": true,
+          "description": "shape effect only - each entity can only trigger on_hit once over the whole effect's lifetime if true."
+        },
+        "hit_interval_ticks": {
+          "type": "integer",
+          "description": "shape effect only - defaults to interval_ticks. Fully independent clock from rendering."
+        },
+        "include_self": {
+          "type": "boolean",
+          "default": false,
+          "description": "shape effect: can it hit the caster? radius targeter: does the caster count as a target?"
+        },
+        "visible_to": {
+          "type": "string",
+          "enum": [
+            "everyone",
+            "caster_only"
+          ],
+          "default": "everyone",
+          "description": "shape effect only. caster_only sends particles to just the caster - the hitbox itself is unaffected either way. Falls back to a normal broadcast if the caster isn't a Player."
+        },
+        "disarm_after_hit": {
+          "type": "boolean",
+          "default": false,
+          "description": "shape effect only - end the WHOLE effect (rendering and hit-scanning both) on its first hit instead of running full duration."
+        },
+        "debug_hitbox": {
+          "type": "boolean",
+          "default": false,
+          "description": "shape effect only - draws a red wireframe of the actual hit area. Always broadcasts to everyone regardless of visible_to - development aid, turn off before shipping."
+        },
+        "debug_hitbox_points": {
+          "type": "integer",
+          "description": "shape effect only - density of the debug wireframe."
+        },
+        "on_hit": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "shape effect only - fires against whatever it hits, with its own fresh SkillContext."
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/shapeLayer"
+          },
+          "description": "shape effect only (required) - one or more independently-animated particle layers, stacked."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sequenceStep"
+          },
+          "description": "sequence effect only (required)."
+        },
+        "entity": {
+          "type": "string",
+          "description": "summon effect only, required - any org.bukkit.entity.EntityType name, e.g. SKELETON, ZOMBIE, WOLF."
+        },
+        "spawn_radius": {
+          "type": "number",
+          "default": 1.5,
+          "description": "summon effect only - spawned mobs are scattered within this many blocks of the caster, not stacked on top of them."
+        },
+        "name": {
+          "type": "string",
+          "description": "summon effect only - custom nameplate for spawned mobs. Omit for the entity type's default vanilla name (no nameplate)."
+        },
+        "health": {
+          "type": "number",
+          "description": "summon effect only - overrides max health (and heals to full). Omit/0 to leave the entity type's own vanilla default."
+        },
+        "main_hand": {
+          "type": "string",
+          "description": "summon effect only - any org.bukkit.Material name to equip in the main hand. Omit for the entity type's vanilla default (often nothing)."
+        },
+        "helmet": {
+          "type": "string",
+          "description": "summon effect only - any org.bukkit.Material name to equip as a helmet."
+        },
+        "max_active": {
+          "type": "integer",
+          "default": 0,
+          "description": "summon effect only - per-caster cap on concurrently active summons from this effect. 0 = uncapped."
+        },
+        "on_cap_exceeded": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "dismiss_oldest"
+          ],
+          "default": "refuse",
+          "description": "summon effect only - what happens when max_active is already reached and this effect tries to spawn another."
+        },
+        "aggro_radius": {
+          "type": "number",
+          "default": 12,
+          "description": "summon effect only - an idle summon (no current living target) targets the nearest hostile Monster within this many blocks. 0 disables auto-aggro entirely."
+        },
+        "follow_radius": {
+          "type": "number",
+          "default": 10,
+          "description": "summon effect only - how far an idle summon can wander from its owner before pathing back."
+        },
+        "move_speed": {
+          "type": "number",
+          "default": 1.0,
+          "description": "summon effect only - Pathfinder speed multiplier used when an idle summon walks back to its owner."
+        },
+        "ai_interval_ticks": {
+          "type": "integer",
+          "default": 10,
+          "description": "summon effect only - how often (in ticks) the follow/aggro check itself runs."
+        },
+        "on_summon": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "summon effect only - fires once per spawned minion, targeting that minion (not the caster's own top-level targets)."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "particle"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "particle"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "potion"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "effect"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "shape"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "layers"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "sequence"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "steps"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "projectile"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "effects"
+            ]
+          }
+        }
+      ]
+    },
+    "shapeLayer": {
+      "type": "object",
+      "description": "One independently-animated particle shape, stacked (with others) inside a `shape` effect's layers: list.",
+      "required": [
+        "shape",
+        "particle"
+      ],
+      "properties": {
+        "shape": {
+          "type": "string",
+          "enum": [
+            "ring",
+            "sphere",
+            "half_sphere",
+            "line",
+            "helix",
+            "cylinder",
+            "box",
+            "arc",
+            "cone",
+            "point",
+            "parametric"
+          ],
+          "description": "Which fields matter depends on this. See USAGE.md's shape-types table for the full per-shape field list. Case-insensitive at runtime; lowercase is the project convention."
+        },
+        "particle": {
+          "type": "string",
+          "description": "Any org.bukkit.Particle name, e.g. FLAME, END_ROD, DUST, SOUL_FIRE_FLAME."
+        },
+        "particle_count": {
+          "type": "integer",
+          "default": 1,
+          "description": "Bukkit's per-call particle count, NOT the point count (that's `points`)."
+        },
+        "color": {
+          "type": "object",
+          "description": "0-255 RGB. Only takes effect when particle/particle: DUST - silently ignored for every other particle type. (shape layer)",
+          "properties": {
+            "r": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "g": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "additionalProperties": false
+        },
+        "dust_size": {
+          "type": "number",
+          "default": 1.0,
+          "description": "DUST particle only."
+        },
+        "points": {
+          "type": "integer",
+          "description": "Point/sample count - meaning depends on shape (ring/sphere point count, line/helix samples, parametric sample count along the curve, ...). box defaults to 96 instead of the generic 24 (see USAGE.md - 24 renders as 8 floating dots with no edges)."
+        },
+        "radius": {
+          "type": "number"
+        },
+        "length": {
+          "type": "number",
+          "description": "LINE, BOX only."
+        },
+        "width": {
+          "type": "number",
+          "description": "BOX only."
+        },
+        "height": {
+          "type": "number",
+          "description": "HELIX, CYLINDER, BOX only."
+        },
+        "turns": {
+          "type": "number",
+          "description": "HELIX only."
+        },
+        "arc_degrees": {
+          "type": "number",
+          "description": "ARC, CONE only."
+        },
+        "rings": {
+          "type": "integer",
+          "description": "CYLINDER (stacked ring levels, ignored if random_distribution: true), CONE (concentric arcs) only."
+        },
+        "plane": {
+          "type": "string",
+          "enum": [
+            "horizontal",
+            "vertical"
+          ],
+          "description": "RING only. vertical = facing-relative 'portal' ring; horizontal (default) = flat 'magic circle', not facing-relative."
+        },
+        "y_offset": {
+          "type": "number",
+          "default": 0,
+          "description": "Static vertical shift applied to every point. Any shape."
+        },
+        "random_distribution": {
+          "type": "boolean",
+          "default": false,
+          "description": "CYLINDER, BOX only. true = scattered points (organic/rough look, generated once at config load) instead of the default clean grid/wireframe."
+        },
+        "radius_jitter": {
+          "type": "number",
+          "default": 0,
+          "description": "CYLINDER only, 0-1. Only meaningful with random_distribution: true - randomizes each point's distance from center."
+        },
+        "facing_relative": {
+          "type": "boolean",
+          "default": false,
+          "description": "CYLINDER, HELIX, BOX, PARAMETRIC only. false = grounded/world orientation (default). true = beam orientation, long axis becomes local +z like LINE. No-op on every other shape type (LINE/ARC/CONE are always facing-relative; RING uses `plane` instead)."
+        },
+        "rotation": {
+          "type": "object",
+          "description": "Constant base tilt in degrees (x/y/z), applied once - doesn't animate. Combine with the rotate_*_deg_per_sec fields for a shape that's both tilted and spinning.",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "rotate_x_deg_per_sec": {
+          "type": "number",
+          "default": 0,
+          "description": "Continuous spin around X (pitch)."
+        },
+        "rotate_deg_per_sec": {
+          "type": "number",
+          "default": 0,
+          "description": "Continuous spin around Y (yaw) - the original field."
+        },
+        "rotate_z_deg_per_sec": {
+          "type": "number",
+          "default": 0,
+          "description": "Continuous spin around Z (roll)."
+        },
+        "scale_start": {
+          "type": "number",
+          "default": 1.0
+        },
+        "scale_end": {
+          "type": "number",
+          "default": 1.0
+        },
+        "scale_axis": {
+          "type": "string",
+          "enum": [
+            "uniform",
+            "radial",
+            "vertical"
+          ],
+          "default": "uniform",
+          "description": "Only matters if scale_start != scale_end. uniform = x/y/z together; radial = x/z only (radius); vertical = y only (height)."
+        },
+        "pulsate_amplitude": {
+          "type": "number",
+          "default": 0
+        },
+        "pulsate_frequency": {
+          "type": "number",
+          "default": 1.0
+        },
+        "rise_per_sec": {
+          "type": "number",
+          "default": 0,
+          "description": "Constant-velocity vertical drift for the whole duration."
+        },
+        "start_offset": {
+          "type": "object",
+          "description": "Animated WORLD-SPACE translation of this layer's own center, lerped to end_offset over the effect's duration.",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "end_offset": {
+          "type": "object",
+          "description": "See start_offset.",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "formula_x": {
+          "type": "string",
+          "description": "PARAMETRIC only, required if shape: parametric. Math expression in t (0->1), i, n, pi, tau, e - see USAGE.md Custom curves section for the function list."
+        },
+        "formula_y": {
+          "type": "string",
+          "description": "PARAMETRIC only, required if shape: parametric."
+        },
+        "formula_z": {
+          "type": "string",
+          "description": "PARAMETRIC only, required if shape: parametric."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "shape": {
+                "const": "parametric"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "formula_x",
+              "formula_y",
+              "formula_z"
+            ]
+          }
+        }
+      ]
+    },
+    "sequenceStep": {
+      "type": "object",
+      "required": [
+        "effects"
+      ],
+      "properties": {
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/effect"
+          },
+          "description": "Everything inside shares the same SkillContext the sequence itself was invoked with."
+        },
+        "delay_ticks": {
+          "type": "integer",
+          "description": "Explicit override for the wait before the NEXT step fires. If omitted and this step contains a `shape` effect, defaults to that shape's own duration_ticks."
+        },
+        "wait_for_shape_duration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Set false to skip the auto-detected shape-duration wait even if this step contains a shape (next step then fires with 0 delay)."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

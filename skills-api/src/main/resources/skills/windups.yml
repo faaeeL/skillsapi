@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=../skills-schema.json
+# Cast times, telegraphs, and traveling projectiles.
+
+skills:
+
+  # --- telegraphed windup + traveling projectile, e.g. an "ougi" ultimate ---
+  # cast_time is a real windup: the caster is locked into it, a telegraph
+  # (particle/sound loop) plays the whole time, and taking damage cancels it
+  # (unless interruptible: false). Nothing resolves until it finishes - so an
+  # opponent watching the telegraph has that whole window to get out of the
+  # way or punish the caster. targeter is "self" here on purpose: the
+  # projectile effect does its own targeting from the caster's look
+  # direction, this targeter just needs to succeed so cast() has someone to
+  # act on.
+  meteor_strike:
+    cooldown: 12000
+    cast_time: 1800            # ms
+    interruptible: true
+    telegraph:
+      particle: LAVA
+      particle_count: 8
+      sound: ENTITY_BLAZE_SHOOT
+      interval_ticks: 4
+    targeter: self
+    cost:
+      type: mana
+      amount: 40
+    effects:
+      - type: projectile
+        particle: FLAME
+        speed: 18              # blocks/second
+        max_distance: 25
+        hit_radius: 1.5
+        gravity: false
+        collide_with_blocks: true
+        effects:                 # applied to whatever the projectile hits
+          - type: damage
+            amount: 14
+          - type: knockback
+            strength: 1.5
+          - type: particle
+            particle: EXPLOSION
+            count: 3
+
+  # --- quick projectile, near-instant cast, pierces through multiple targets ---
+  piercing_bolt:
+    cooldown: 4000
+    cast_time: 300              # short - just enough to see it coming
+    targeter: self
+    cost:
+      type: mana
+      amount: 10
+    effects:
+      - type: projectile
+        particle: CRIT
+        speed: 30
+        max_distance: 20
+        hit_radius: 0.8
+        pierce: 3                # keeps going after the first hit, up to 3 total
+        effects:
+          - type: damage
+            amount: 4
+
+  # --- "shape" effects: stacked, animated particle geometry with its own ---
+  # --- hitbox. This is the general-purpose building block for anything ---
+  # --- that should look like a real skill telegraph/impact, not just a ---
+  # --- puff of particles. Each entry under `layers:` is one shape; stack ---
+  # --- as many as you want and they render together. See README for the ---
+  # --- full field reference.
