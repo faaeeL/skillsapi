@@ -1,7 +1,0 @@
-resources:
-  mana:
-    max: 100
-    regen_per_second: 1.5
-  stamina:
-    max: 100
-    regen_per_second: 4.0
