@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../skills-schema.json
+# Simple, self-contained skills - damage/heal/knockback/particle only,
+# no shape/sequence/status machinery. Good starting reference.
+
+skills:
+
+  fireball:
+    cooldown: 5000            # ms
+    targeter: single          # whatever entity you're looking at
+    range: 30
+    cost:
+      type: mana
+      amount: 15
+    effects:
+      - type: damage
+        amount: 8
+      - type: particle
+        particle: FLAME
+        count: 20
+
+  heal_burst:
+    cooldown: 8000
+    targeter: radius
+    radius: 5
+    include_self: true
+    cost:
+      type: mana
+      amount: 25
+    effects:
+      - type: heal
+        amount: 6
+      - type: particle
+        particle: HEART
+        count: 10
+
+  whirlwind:
+    cooldown: 6000
+    targeter: cone
+    range: 4
+    angle: 120
+    cost:
+      type: stamina
+      amount: 30
+    effects:
+      - type: damage
+        amount: 5
+      - type: knockback
+        strength: 1.2
+
+  battle_shout:
+    cooldown: 15000
+    targeter: radius
+    radius: 8
+    include_self: true
+    min_health_percent: 0.3   # only works above 30% hp - example condition
+    effects:
+      - type: potion
+        effect: STRENGTH
+        duration_ticks: 200
+        amplifier: 1
+      - type: particle
+        particle: CRIT
+        count: 15

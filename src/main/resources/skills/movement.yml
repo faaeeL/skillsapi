@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=../skills-schema.json
+# Dash/status-based movement skills.
+
+skills:
+
+  # A short forward burst: covers 8 blocks in 6 ticks (0.3s), staying flat
+  # (horizontal_only + disable_gravity) instead of arcing up/down with
+  # gravity mid-dash. `dash` used to be its own hardcoded effect with two
+  # fixed particle slots (trail + foot ring); it's a `status` now instead -
+  # the movement itself is still the same repeated-setVelocity trick (see
+  # DashStatusBehavior), and direction now comes from the caster's *current
+  # velocity* rather than where they're looking (falls back to look
+  # direction only if they're standing still). on_tick/on_start/on_expire
+  # are just plain effects lists, so you can stack as many - or as fancy,
+  # `shape`/`sequence`/anything - as you want instead of being stuck with
+  # exactly "trail particle" + "foot particle".
+  wind_step:
+    cooldown: 4000
+    targeter: self
+    cost:
+      type: stamina
+      amount: 15
+    effects:
+      - type: status
+        behavior: dash
+        duration_ticks: 6
+        distance: 8
+        horizontal_only: true
+        disable_gravity: true
+        tick_interval_ticks: 1    # every tick, so the trail is continuous
+        on_tick:
+          - type: particle         # trailing puffs behind the caster
+            particle: CLOUD
+            count: 4
+          - type: particle         # freely stacked alongside it - this was
+            particle: CRIT         # exactly the thing DashEffect couldn't do
+            count: 2
+        on_expire:
+          - type: particle         # a little puff when the dash ends -
+            particle: CLOUD        # this hook didn't exist before at all
+            count: 10
+
+  # Ice bolt: a traveling projectile whose on-hit effects both damage and
+  # inflict the shared `frozen` status defined above. This is the shape a
+  # future "ice" skill family would take - any number of these could all
+  # reference the same `frozen` definition without repeating its config.
+  frostbite_bolt:
+    cooldown: 6000
+    cast_time: 300
+    targeter: self
+    cost:
+      type: mana
+      amount: 20
+    effects:
+      - type: projectile
+        particle: SNOWFLAKE
+        speed: 22
+        max_distance: 20
+        hit_radius: 1.0
+        effects:
+          - type: damage
+            amount: 5
+          - type: status
+            status: frozen          # reference, not a redefinition

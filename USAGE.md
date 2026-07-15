@@ -2,6 +2,8 @@
 
 Reference for `skills/*.yml` and `resources.yml`. Generated from `SkillConfigParser.java`.
 
+> **Nested blocks vs. flat keys:** `shape`/`projectile`'s `hit:` and `summon`'s `cap:`/`ai:` blocks shown throughout this doc are the recommended style. Older configs using flat keys (`hit_radius`, `hit_area`, `on_hit`, `max_active`, `aggro_radius`, etc. directly on the effect) still work unchanged — the parser checks the nested block first and falls back to the matching flat key for anything it doesn't set. Don't mix both for the same field in one effect; if both are present, the nested value wins.
+
 ## Contents
 
 1. [Quick start](#quick-start)
@@ -857,16 +859,17 @@ skills:
               - type: shape
                 anchor: cursor_locked
                 duration_ticks: 20
-                hit_radius: 3.5
-                hit_area: disk
-                hit_height: 2.5
-                hit_once: true
-                on_hit:
-                  - type: damage
-                    amount: 14
-                  - type: status
-                    behavior: frozen
-                    duration_ticks: 40
+                hit:
+                  radius: 3.5
+                  area: disk
+                  height: 2.5
+                  once: true
+                  effects:
+                    - type: damage
+                      amount: 14
+                    - type: status
+                      behavior: frozen
+                      duration_ticks: 40
                 layers:
                   - shape: cylinder
                     particle: FLAME
