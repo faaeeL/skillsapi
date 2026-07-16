@@ -41,7 +41,12 @@ public class ShapeEffect implements SkillEffect {
     // re-raycasting the caster's aim at whatever moment *that* stage happens
     // to start. A fresh SkillContext is created per cast, so this never
     // leaks a locked point across two different casts of the skill.
-    private static final String CURSOR_LOCK_KEY = "shape_effect_cursor_locked_anchor";
+    // Package-visible (not private) so other effects sharing a SkillContext
+    // within one `sequence` - e.g. `rain` - can anchor to this exact same
+    // resolved point instead of independently re-raytracing the caster's
+    // crosshair a moment later, which would drift if the caster moves or
+    // turns between sequence steps.
+    static final String CURSOR_LOCK_KEY = "shape_effect_cursor_locked_anchor";
 
     public enum Anchor { SELF, SELF_FIXED, TARGET, CURSOR, CURSOR_LOCKED }
 
@@ -82,10 +87,17 @@ public class ShapeEffect implements SkillEffect {
     private final double cursorRange;
     private final Travel travel;
 
-    // Local-space (right/up/forward, relative to the caster's current facing)
-    // offset applied to wherever the anchor resolves to, every tick. This is
-    // what lets you nudge an effect e.g. "1 block forward, 1.5 up" from the
-    // player/target/cursor point instead of it always being dead-center.
+    // Offset applied to wherever the anchor resolves to, every tick.
+    // offsetX/offsetZ are local-space (right/forward, relative to the
+    // caster's current facing) - "1 block forward" stays forward as the
+    // caster turns. offsetY is plain world-Y, not local "up": local up
+    // tilts away from true vertical whenever the caster isn't looking
+    // exactly level (computeBasis derives it from the full 3D look
+    // direction, pitch included), which is essentially always true for
+    // anything anchored at a ground target - "1.5 blocks up" should mean
+    // 1.5 blocks of real height regardless of how steeply the caster's
+    // aiming, not something that only lifts straight up when they happen
+    // to be looking flat ahead.
     private final double offsetX;
     private final double offsetY;
     private final double offsetZ;
@@ -256,12 +268,23 @@ public class ShapeEffect implements SkillEffect {
                     forward = fixedBasis[2];
                 }
 
+                // offsetY intentionally does NOT go through `up` here - `up`
+                // is derived from the caster's full 3D look direction
+                // (computeBasis), so it tilts away from true vertical
+                // whenever the caster isn't looking exactly level, which is
+                // essentially always for anything anchored at a ground
+                // target (you're aiming down at it). "Lift N blocks into
+                // the sky" should mean N blocks of real world-Y regardless
+                // of the caster's pitch, so offsetY is added straight to Y
+                // directly instead. offsetX/offsetZ stay facing-relative
+                // through right/forward - a horizontal nudge still makes
+                // sense to keep tied to which way the caster's facing.
                 Location offsetPoint = center.clone();
-                if (offsetX != 0 || offsetY != 0 || offsetZ != 0) {
+                if (offsetX != 0 || offsetZ != 0) {
                     offsetPoint.add(right.clone().multiply(offsetX));
-                    offsetPoint.add(up.clone().multiply(offsetY));
                     offsetPoint.add(forward.clone().multiply(offsetZ));
                 }
+                offsetPoint.add(0, offsetY, 0);
 
                 if (travelVelocityPerTick != null) {
                     // A single point-sample (offsetPoint.getBlock().isSolid())
@@ -309,11 +332,11 @@ public class ShapeEffect implements SkillEffect {
                 // Recomputed against center's post-travel position (offsetPoint above
                 // was only this tick's pre-travel collision probe).
                 Location renderCenter = center.clone();
-                if (offsetX != 0 || offsetY != 0 || offsetZ != 0) {
+                if (offsetX != 0 || offsetZ != 0) {
                     renderCenter.add(right.clone().multiply(offsetX));
-                    renderCenter.add(up.clone().multiply(offsetY));
                     renderCenter.add(forward.clone().multiply(offsetZ));
                 }
+                renderCenter.add(0, offsetY, 0);
 
                 double elapsedSeconds = elapsedTicks / 20.0;
 
