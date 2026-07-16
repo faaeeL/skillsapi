@@ -20,6 +20,7 @@ import com.example.skillsapi.status.StatusManager;
 import com.example.skillsapi.summon.SummonManager;
 import com.example.skillsapi.targeter.*;
 import com.example.skillsapi.threat.ThreatManager;
+import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -186,6 +187,11 @@ public class SkillConfigParser {
                     PotionEffectType.getByName(raw.get("effect").toString()),
                     toInt(raw.get("duration_ticks"), 100),
                     toInt(raw.get("amplifier"), 0)
+            );
+            case "glow" -> new GlowEffect(
+                    plugin,
+                    ChatColor.valueOf(raw.get("color") == null ? "WHITE" : raw.get("color").toString().toUpperCase(Locale.ROOT)),
+                    toInt(raw.get("duration_ticks"), 100)
             );
             case "knockback" -> new KnockbackEffect(toDouble(raw.get("strength"), 1));
             case "status" -> parseStatusEffect(raw, plugin, statusManager, summonManager, threatManager);
