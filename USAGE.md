@@ -14,7 +14,7 @@ Reference for `skills/*.yml` and `resources.yml`. Generated from `SkillConfigPar
 6. [Cost & resources](#cost--resources)
 7. [Cast time, interrupts, telegraph](#cast-time-interrupts-telegraph)
 8. [Effects](#effects)
-   - [damage](#damage) · [heal](#heal) · [particle](#particle) · [potion](#potion) · [glow](#glow) · [knockback](#knockback)
+   - [damage](#damage) · [heal](#heal) · [particle](#particle) · [potion](#potion) · [glow](#glow) · [knockback](#knockback) · [rain](#rain)
    - [status](#status-effect)
    - [projectile](#projectile)
    - [summon](#summon) · [dismiss_summons](#summon)
@@ -622,7 +622,36 @@ Chains stages of effects with delays between them.
 
 ---
 
-## Statuses
+### rain
+```yaml
+- type: rain
+  anchor: target          # self | target, default target
+  range: 20                 # target only - max raytrace distance
+  count: 12                  # how many drops, default 10
+  radius: 4                   # horizontal scatter radius around the anchor, default 4
+  height: 12                   # spawn height above the anchor, default 12
+  speed: 20                     # blocks/sec fall speed, default 20
+  gravity: true                  # accelerate as it falls, default true
+  collide_with_blocks: true       # stop at the ground/a block, default true
+  particle: DUST
+  dust_color: {r: 120, g: 170, b: 255}   # DUST only
+  dust_size: 1.0                          # DUST only
+  stagger_ticks: {min: 0, max: 20}   # random per-drop delay before it starts falling, default {0,0}
+  hit:
+    radius: 1.0
+    once: true
+    effects:
+      - type: damage
+        amount: 6
+```
+`count` independent drops, each scattered to a random point within `radius` of the anchor (uniform across the disk's *area*, not bunched toward the center), spawned `height` blocks up, and falling straight down - each on its own random `stagger_ticks` delay so they don't all launch on the same tick, which is what actually reads as rain instead of a synchronized volley. Each drop is its own miniature simulated projectile: own trail particle, own block-collision check (raytraced across each tick's fall distance, `ignorePassableBlocks: false` - so it stops on stairs/slabs/fences too, not just full blocks), own small `hit_radius` + `on_hit` payload, capped to `hit_once` per entity same as `shape`/`projectile`.
+
+- `anchor: self` centers the scatter on the caster's own location; `anchor: target` (default) raytraces from the caster's crosshair up to `range` and centers on whatever that hits (block or open air at max range) - resolved once at cast time, not tracked live.
+- `hit:` follows the same nested-block-with-flat-key-fallback convention as `shape`/`projectile` (`hit.radius`/`hit_radius`, `hit.once`/`hit_once`, `hit.effects`/`on_hit`).
+- Pairs naturally with a `shape` (`ring`, `offset: {y: <height>}`) telegraphing the drop zone first, then a `sequence` step later triggering the `rain` itself - see the worked example at the end of this doc.
+- No per-drop max-fall-distance config; each drop self-cancels once it's fallen roughly `height * 4 + 64` blocks with no collision (a generous safety cap for an anchor with no ground under it, e.g. over a void), not a tunable gameplay parameter.
+
+
 
 ```yaml
 statuses:
