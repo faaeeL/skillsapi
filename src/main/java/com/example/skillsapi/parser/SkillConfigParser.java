@@ -201,8 +201,65 @@ public class SkillConfigParser {
             case "summon" -> parseSummon(raw, plugin, statusManager, summonManager, threatManager);
             case "dismiss_summons" -> new DismissSummonsEffect(summonManager);
             case "taunt" -> new TauntEffect(threatManager, toDouble(raw.get("amount"), 1000));
+            case "rain" -> parseRainEffect(raw, plugin, statusManager, summonManager, threatManager);
             default -> null;
         };
+    }
+
+    /**
+     * Parses a `rain` effect: `count` independently-falling drops scattered
+     * within `radius` of an anchor, each on its own random stagger delay -
+     * see RainEffect's own doc comment for the full field list/semantics.
+     * Follows the same nested-`hit:`-with-flat-fallback convention as
+     * `shape`/`projectile` for its hit config.
+     */
+    private static SkillEffect parseRainEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+        RainEffect.Anchor anchor = "self".equalsIgnoreCase(String.valueOf(raw.get("anchor")))
+                ? RainEffect.Anchor.SELF : RainEffect.Anchor.TARGET;
+
+        Particle trailParticle = raw.get("particle") != null ? Particle.valueOf(raw.get("particle").toString()) : null;
+        Color dustColor = null;
+        if (raw.get("dust_color") instanceof Map<?, ?> colorRaw) {
+            dustColor = Color.fromRGB(
+                    clampByte(toInt(colorRaw.get("r"), 255)),
+                    clampByte(toInt(colorRaw.get("g"), 255)),
+                    clampByte(toInt(colorRaw.get("b"), 255))
+            );
+        }
+        float dustSize = (float) toDouble(raw.get("dust_size"), 1.0);
+
+        int staggerMin = 0, staggerMax = 0;
+        if (raw.get("stagger_ticks") instanceof Map<?, ?> staggerRaw) {
+            staggerMin = toInt(staggerRaw.get("min"), 0);
+            staggerMax = toInt(staggerRaw.get("max"), staggerMin);
+        }
+
+        // Same nested-`hit:`-with-flat-fallback convention as shape/projectile.
+        Map<?, ?> hitRaw = raw.get("hit") instanceof Map<?, ?> m ? m : null;
+        double hitRadius = toDouble(hitRaw != null && hitRaw.get("radius") != null ? hitRaw.get("radius") : raw.get("hit_radius"), 1.0);
+        boolean hitOnce = toBool(hitRaw != null && hitRaw.get("once") != null ? hitRaw.get("once") : raw.get("hit_once"), true);
+        Object onHitSource = hitRaw != null && hitRaw.get("effects") != null ? hitRaw.get("effects") : raw.get("on_hit");
+        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager);
+
+        return new RainEffect(
+                plugin,
+                anchor,
+                toDouble(raw.get("range"), 20),
+                toInt(raw.get("count"), 10),
+                toDouble(raw.get("radius"), 4),
+                toDouble(raw.get("height"), 12),
+                toDouble(raw.get("speed"), 20),
+                toBool(raw.get("gravity"), true),
+                toBool(raw.get("collide_with_blocks"), true),
+                trailParticle,
+                dustColor,
+                dustSize,
+                staggerMin,
+                staggerMax,
+                hitRadius,
+                hitOnce,
+                onHit
+        );
     }
 
     /**
