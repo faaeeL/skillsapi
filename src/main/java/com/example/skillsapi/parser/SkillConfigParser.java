@@ -237,6 +237,14 @@ public class SkillConfigParser {
             staggerMax = toInt(staggerRaw.get("max"), staggerMin);
         }
 
+        int durationTicks = toInt(raw.get("duration_ticks"), 0);
+        double dropsPerSecond = toDouble(raw.get("drops_per_second"), 2);
+        // `count` is left null (rather than defaulted here) when absent, so
+        // RainEffect itself can tell "not specified" apart from "explicitly
+        // 0" and pick the right default for whichever mode (burst vs
+        // duration_ticks storm) actually ends up active.
+        Integer explicitCount = raw.get("count") != null ? toInt(raw.get("count"), 10) : null;
+
         // Same nested-`hit:`-with-flat-fallback convention as shape/projectile.
         Map<?, ?> hitRaw = raw.get("hit") instanceof Map<?, ?> m ? m : null;
         double hitRadius = toDouble(hitRaw != null && hitRaw.get("radius") != null ? hitRaw.get("radius") : raw.get("hit_radius"), 1.0);
@@ -248,7 +256,8 @@ public class SkillConfigParser {
                 plugin,
                 anchor,
                 toDouble(raw.get("range"), 20),
-                toInt(raw.get("count"), 10),
+                explicitCount,
+                dropsPerSecond,
                 toDouble(raw.get("radius"), 4),
                 toDouble(raw.get("height"), 12),
                 toDouble(raw.get("speed"), 20),
@@ -259,6 +268,7 @@ public class SkillConfigParser {
                 dustSize,
                 staggerMin,
                 staggerMax,
+                durationTicks,
                 hitRadius,
                 hitOnce,
                 onHit

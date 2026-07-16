@@ -56,7 +56,9 @@ import java.util.stream.Collectors;
  *     particle: DUST
  *     dust_color: {r: 120, g: 170, b: 255}
  *     dust_size: 1.0
- *     stagger_ticks: {min: 0, max: 20}   # random per-drop delay before it starts falling
+ *     stagger_ticks: {min: 0, max: 20}   # random per-drop delay before it starts falling - burst mode only, ignored if duration_ticks is set
+ *     duration_ticks: 0        # if >0, switches to an ongoing-storm mode: drops keep spawning throughout this whole window instead of one clustered burst, and stagger_ticks is ignored. default 0 (burst mode)
+ *     drops_per_second: 2      # duration_ticks mode only, used when `count` isn't explicitly set - total drops = drops_per_second * (duration_ticks / 20)
  *     hit:
  *       radius: 1.0
  *       once: true
@@ -71,7 +73,8 @@ public class RainEffect implements SkillEffect {
     private final Plugin plugin;
     private final Anchor anchor;
     private final double range;
-    private final int count;
+    private final Integer explicitCount;
+    private final double dropsPerSecond;
     private final double radius;
     private final double height;
     private final double speedBlocksPerSecond;
@@ -81,19 +84,22 @@ public class RainEffect implements SkillEffect {
     private final Particle.DustOptions dustOptions;
     private final int staggerMinTicks;
     private final int staggerMaxTicks;
+    private final int durationTicks;
     private final double hitRadius;
     private final boolean hitOnce;
     private final List<SkillEffect> onHitEffects;
 
-    public RainEffect(Plugin plugin, Anchor anchor, double range, int count, double radius, double height,
+    public RainEffect(Plugin plugin, Anchor anchor, double range, Integer explicitCount, double dropsPerSecond,
+                       double radius, double height,
                        double speedBlocksPerSecond, boolean gravity, boolean collideWithBlocks,
                        Particle trailParticle, Color dustColor, float dustSize,
-                       int staggerMinTicks, int staggerMaxTicks,
+                       int staggerMinTicks, int staggerMaxTicks, int durationTicks,
                        double hitRadius, boolean hitOnce, List<SkillEffect> onHitEffects) {
         this.plugin = plugin;
         this.anchor = anchor;
         this.range = range;
-        this.count = count;
+        this.explicitCount = explicitCount;
+        this.dropsPerSecond = dropsPerSecond;
         this.radius = radius;
         this.height = height;
         this.speedBlocksPerSecond = speedBlocksPerSecond;
@@ -104,6 +110,7 @@ public class RainEffect implements SkillEffect {
                 ? new Particle.DustOptions(dustColor, dustSize) : null;
         this.staggerMinTicks = Math.max(0, staggerMinTicks);
         this.staggerMaxTicks = Math.max(this.staggerMinTicks, staggerMaxTicks);
+        this.durationTicks = Math.max(0, durationTicks);
         this.hitRadius = hitRadius;
         this.hitOnce = hitOnce;
         this.onHitEffects = onHitEffects;
@@ -118,7 +125,24 @@ public class RainEffect implements SkillEffect {
         World world = origin.getWorld();
         ThreadLocalRandom random = ThreadLocalRandom.current();
 
-        for (int i = 0; i < count; i++) {
+        // Two distinct modes, chosen by whether duration_ticks is set:
+        //   burst (default, duration_ticks: 0) - `count` drops, each
+        //     launching at a random point inside one short stagger_ticks
+        //     window. Good for a quick, punchy volley.
+        //   storm (duration_ticks > 0) - drops keep spawning across the
+        //     *entire* duration_ticks window instead of one clustered
+        //     burst; stagger_ticks is ignored (duration_ticks replaces it
+        //     as the spawn window). Total count is either explicit
+        //     (`count`) or derived from `drops_per_second * duration`, so
+        //     you can say "rain for 5 seconds" without hand-tuning a
+        //     count/window pair to match.
+        boolean stormMode = durationTicks > 0;
+        int spawnWindowTicks = stormMode ? durationTicks : staggerMaxTicks;
+        int totalCount = explicitCount != null
+                ? explicitCount
+                : (stormMode ? (int) Math.round(dropsPerSecond * (durationTicks / 20.0)) : 10);
+
+        for (int i = 0; i < totalCount; i++) {
             // sqrt(random) rather than a plain random distance -> uniform
             // density across the disk's *area*, not bunched toward the
             // center the way a plain linear random radius would be.
@@ -128,8 +152,9 @@ public class RainEffect implements SkillEffect {
             double dropZ = origin.getZ() + Math.sin(angle) * dist;
             Location start = new Location(world, dropX, origin.getY() + height, dropZ);
 
-            int delay = staggerMaxTicks > staggerMinTicks
-                    ? random.nextInt(staggerMinTicks, staggerMaxTicks + 1) : staggerMinTicks;
+            int delay = stormMode
+                    ? (spawnWindowTicks > 0 ? random.nextInt(0, spawnWindowTicks + 1) : 0)
+                    : (staggerMaxTicks > staggerMinTicks ? random.nextInt(staggerMinTicks, staggerMaxTicks + 1) : staggerMinTicks);
 
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> spawnDrop(caster, context, start), delay);
         }

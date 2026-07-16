@@ -619,6 +619,7 @@ Chains stages of effects with delays between them.
 - `wait_for_shape_duration: false` skips the auto-wait (0 delay).
 - Multiple shapes in one step: only the last parsed sets the auto-delay.
 - Nests anywhere any other effect does.
+- **Running things at the same time doesn't need `sequence` at all** - every effect listed together under one `effects:` (a skill's top-level list, or one sequence step's own list) already fires simultaneously; `sequence` only controls the *delay between* separate steps. If you want two effects side by side with zero relative delay but still as separate steps (e.g. so one can auto-derive its own delay from a `shape`'s `duration_ticks` while the other starts immediately), set `delay_ticks: 0` and `wait_for_shape_duration: false` on the earlier step - that starts the next step on the same tick instead of waiting.
 
 ---
 
@@ -636,7 +637,9 @@ Chains stages of effects with delays between them.
   particle: DUST
   dust_color: {r: 120, g: 170, b: 255}   # DUST only
   dust_size: 1.0                          # DUST only
-  stagger_ticks: {min: 0, max: 20}   # random per-drop delay before it starts falling, default {0,0}
+  stagger_ticks: {min: 0, max: 20}   # random per-drop delay before it starts falling - burst mode only (see below), ignored if duration_ticks is set
+  duration_ticks: 0        # if >0, switches to storm mode: drops keep spawning throughout this whole window instead of one clustered burst. default 0 (burst mode)
+  drops_per_second: 2      # storm mode only, used when `count` isn't set - total drops = drops_per_second * (duration_ticks / 20)
   hit:
     radius: 1.0
     once: true
@@ -644,11 +647,15 @@ Chains stages of effects with delays between them.
       - type: damage
         amount: 6
 ```
-`count` independent drops, each scattered to a random point within `radius` of the anchor (uniform across the disk's *area*, not bunched toward the center), spawned `height` blocks up, and falling straight down - each on its own random `stagger_ticks` delay so they don't all launch on the same tick, which is what actually reads as rain instead of a synchronized volley. Each drop is its own miniature simulated projectile: own trail particle, own block-collision check (raytraced across each tick's fall distance, `ignorePassableBlocks: false` - so it stops on stairs/slabs/fences too, not just full blocks), own small `hit_radius` + `on_hit` payload, capped to `hit_once` per entity same as `shape`/`projectile`.
+Two modes, chosen by whether `duration_ticks` is set:
+- **burst** (default, `duration_ticks: 0`): `count` drops (default 10), each launching at a random point inside one short `stagger_ticks` window. Good for a quick, punchy volley.
+- **storm** (`duration_ticks > 0`): drops keep spawning across the *entire* `duration_ticks` window instead of one clustered burst - `stagger_ticks` is ignored (`duration_ticks` replaces it as the spawn window). Total count is either explicit (`count`) or derived from `drops_per_second * duration`, so you can say "rain for 5 seconds" without hand-tuning a count/window pair to fit.
+
+`count` independent drops, each scattered to a random point within `radius` of the anchor (uniform across the disk's *area*, not bunched toward the center), spawned `height` blocks up, and falling straight down. Each drop is its own miniature simulated projectile: own trail particle, own block-collision check (raytraced across each tick's fall distance, `ignorePassableBlocks: false` - so it stops on stairs/slabs/fences too, not just full blocks), own small `hit_radius` + `on_hit` payload, capped to `hit_once` per entity same as `shape`/`projectile`.
 
 - `anchor: self` centers the scatter on the caster's own location. `anchor: cursor` raytraces the caster's crosshair up to `range` and centers on whatever that hits (block or open air at max range), resolved fresh each time. `anchor: cursor_locked` does the same raytrace, but shares `shape`'s own cursor-lock cache on the SkillContext - if an earlier `sequence` step used a `cursor_locked` shape (e.g. a telegraph ring), this reuses that *exact* resolved point instead of raytracing the crosshair again a moment later, which would drift apart if the caster moved or turned in between steps. Deliberately not named `target` - `shape`'s own `target` anchor means something different (the first entity from the skill's *targeter*, not a raytraced point); reusing that name here for a raytrace would silently anchor `rain` and a `shape` to two unrelated things any time the skill's targeter isn't also crosshair-based.
 - `hit:` follows the same nested-block-with-flat-key-fallback convention as `shape`/`projectile` (`hit.radius`/`hit_radius`, `hit.once`/`hit_once`, `hit.effects`/`on_hit`).
-- Pairs naturally with a `shape` (`ring`, `anchor: cursor_locked`, `offset: {y: <height>}`) telegraphing the drop zone first, then a `sequence` step later triggering a `rain` with the same `anchor: cursor_locked` + matching `radius`/`height` - see the worked example at the end of this doc. Match `radius` and `height` between the two, and use `cursor_locked` (not `cursor`) on both, or the ring and the rain won't line up.
+- Pairs naturally with a `shape` (`ring`, `anchor: cursor_locked`, `offset: {y: <height>}`) telegraphing the drop zone first, then a `sequence` step later triggering a `rain` with the same `anchor: cursor_locked` + matching `radius`/`height` - see the worked example at the end of this doc. Match `radius` and `height` between the two, use `cursor_locked` (not `cursor`) on both, and if you want the ring to stay visible for the whole storm, match the ring's `duration_ticks` to the rain's `duration_ticks` too.
 - No per-drop max-fall-distance config; each drop self-cancels once it's fallen roughly `height * 4 + 64` blocks with no collision (a generous safety cap for an anchor with no ground under it, e.g. over a void), not a tunable gameplay parameter.
 
 
