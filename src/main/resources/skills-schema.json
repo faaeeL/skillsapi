@@ -224,7 +224,10 @@
             "sequence",
             "summon",
             "dismiss_summons",
-            "taunt"
+            "taunt",
+            "rain",
+            "glow",
+            "chain"
           ]
         },
         "amount": {
@@ -238,34 +241,41 @@
         },
         "count": {
           "type": "integer",
-          "description": "particle effect: default 10. summon effect: default 1 - how many mobs to spawn per cast."
+          "description": "particle effect: default 10. summon effect: default 1 - how many mobs to spawn per cast. rain effect: burst mode default 10 - total drops. In storm mode (duration_ticks > 0), omit to derive the total from drops_per_second instead."
         },
         "color": {
-          "type": "object",
-          "description": "0-255 RGB. Only takes effect when particle/particle: DUST - silently ignored for every other particle type. (particle effect)",
-          "properties": {
-            "r": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 255
+          "description": "particle/shape-layer effect: 0-255 RGB object, only takes effect when particle: DUST, silently ignored otherwise. glow effect: a org.bukkit.ChatColor name string instead (e.g. RED, LIGHT_PURPLE), default WHITE - these are two different fields that happen to share a name; only one shape applies depending on effect type.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "r": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "g": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "b": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              },
+              "additionalProperties": false
             },
-            "g": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 255
-            },
-            "b": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 255
+            {
+              "type": "string"
             }
-          },
-          "additionalProperties": false
+          ]
         },
         "dust_size": {
           "type": "number",
           "default": 1.0,
-          "description": "particle effect only, DUST particle only."
+          "description": "particle effect only, DUST particle only. rain effect: DUST trail particle only."
         },
         "effect": {
           "type": "string",
@@ -273,7 +283,7 @@
         },
         "duration_ticks": {
           "type": "integer",
-          "description": "potion effect: default 100. status effect (inline definition): -1 = indefinite. summon effect: default -1 = lives until it dies or is dismissed; a positive value despawns it after that many ticks."
+          "description": "potion effect: default 100. status effect (inline definition): -1 = indefinite. summon effect: default -1 = lives until it dies or is dismissed; a positive value despawns it after that many ticks. rain effect: 0 (default) = burst mode (see `count`/`stagger_ticks`); >0 = storm mode, drops keep spawning throughout this whole window instead of one clustered burst. glow effect: default 100 (5s)."
         },
         "amplifier": {
           "type": "integer",
@@ -356,7 +366,7 @@
         "hit_radius": {
           "type": "number",
           "default": 1.0,
-          "description": "projectile effect: default 1.0. shape effect: omit or 0 disables hit detection entirely."
+          "description": "projectile effect: default 1.0. shape effect: omit or 0 disables hit detection entirely. rain effect: default 1.0, per-drop."
         },
         "pierce": {
           "type": "integer",
@@ -366,19 +376,19 @@
         "gravity": {
           "type": "boolean",
           "default": false,
-          "description": "projectile effect only."
+          "description": "projectile effect only. rain effect: default true, per-drop."
         },
         "collide_with_blocks": {
           "type": "boolean",
           "default": true,
-          "description": "projectile effect only."
+          "description": "projectile effect only. rain effect: default true, per-drop, raytraced across each tick's fall distance (stops on stairs/slabs/fences too, not just full blocks)."
         },
         "effects": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/effect"
           },
-          "description": "projectile effect only (required) - fires on whatever it hits. Can nest anything, including another projectile/shape/status."
+          "description": "projectile effect only (required) - fires on whatever it hits. Can nest anything, including another projectile/shape/status. chain effect (required) - fires against whichever entity the chain is currently at, once per bounce including the first hit."
         },
         "anchor": {
           "type": "string",
@@ -390,7 +400,7 @@
             "cursor_locked"
           ],
           "default": "self",
-          "description": "shape effect only. self/target follow their reference point every render tick; self_fixed/cursor/cursor_locked resolve once and hold still (aside from travel/offset/layer animation)."
+          "description": "shape effect only. self/target follow their reference point every render tick; self_fixed/cursor/cursor_locked resolve once and hold still (aside from travel/offset/layer animation). rain effect only supports self/cursor/cursor_locked (not self_fixed/target) - cursor_locked shares shape's own cursor-lock cache on the SkillContext, so a rain step can anchor to the exact same point an earlier cursor_locked shape step already resolved."
         },
         "cursor_range": {
           "type": "number",
@@ -457,7 +467,7 @@
         "hit_once": {
           "type": "boolean",
           "default": true,
-          "description": "shape effect only - each entity can only trigger on_hit once over the whole effect's lifetime if true."
+          "description": "shape/rain effect - each entity can only trigger on_hit once over the whole effect's lifetime if true."
         },
         "hit_interval_ticks": {
           "type": "integer",
@@ -485,7 +495,7 @@
         "debug_hitbox": {
           "type": "boolean",
           "default": false,
-          "description": "shape effect only - draws a red wireframe of the actual hit area. Always broadcasts to everyone regardless of visible_to - development aid, turn off before shipping."
+          "description": "shape/rain effect - draws a red wireframe of the actual hit area. Always broadcasts to everyone regardless of visible_to - development aid, turn off before shipping."
         },
         "debug_hitbox_points": {
           "type": "integer",
@@ -496,7 +506,7 @@
           "items": {
             "$ref": "#/definitions/effect"
           },
-          "description": "shape effect only - fires against whatever it hits, with its own fresh SkillContext."
+          "description": "shape/rain/projectile effect - fires against whatever it hits, with its own fresh SkillContext. Equivalent to nested hit.effects; see the `hit` object below for the preferred nested form."
         },
         "layers": {
           "type": "array",
@@ -577,6 +587,222 @@
             "$ref": "#/definitions/effect"
           },
           "description": "summon effect only - fires once per spawned minion, targeting that minion (not the caster's own top-level targets)."
+        },
+        "radius": {
+          "type": "number",
+          "default": 4,
+          "description": "rain effect only - horizontal scatter radius around the anchor, uniform across the disk's area."
+        },
+        "height": {
+          "type": "number",
+          "default": 12,
+          "description": "rain effect only - spawn height above the anchor."
+        },
+        "range": {
+          "type": "number",
+          "default": 20,
+          "description": "rain effect only, anchor: cursor/cursor_locked only - max raytrace distance for the crosshair."
+        },
+        "drops_per_second": {
+          "type": "number",
+          "default": 2,
+          "description": "rain effect only, duration_ticks (storm) mode only, used when `count` isn't explicitly set - total drops = drops_per_second * (duration_ticks / 20)."
+        },
+        "stagger_ticks": {
+          "type": "object",
+          "description": "rain effect only, burst mode only (ignored if duration_ticks is set) - random per-drop delay window before it starts falling.",
+          "properties": {
+            "min": {
+              "type": "integer",
+              "default": 0
+            },
+            "max": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "hit": {
+          "type": "object",
+          "description": "shape/projectile/rain effect - nested hit config, preferred over the flat hit_radius/hit_area/etc. keys documented above (which still work as a fallback for anything this block doesn't set).",
+          "properties": {
+            "radius": {
+              "type": "number",
+              "description": "same as hit_radius."
+            },
+            "area": {
+              "type": "string",
+              "enum": [
+                "points",
+                "disk",
+                "sphere"
+              ],
+              "description": "shape effect only - same as hit_area."
+            },
+            "height": {
+              "type": "number",
+              "description": "shape effect only, area: disk only - same as hit_height."
+            },
+            "once": {
+              "type": "boolean",
+              "default": true,
+              "description": "same as hit_once."
+            },
+            "interval_ticks": {
+              "type": "integer",
+              "description": "shape effect only - same as hit_interval_ticks."
+            },
+            "include_self": {
+              "type": "boolean",
+              "default": false,
+              "description": "same as include_self."
+            },
+            "disarm": {
+              "type": "boolean",
+              "default": false,
+              "description": "shape effect only - same as disarm_after_hit."
+            },
+            "debug": {
+              "type": "boolean",
+              "default": false,
+              "description": "same as debug_hitbox."
+            },
+            "effects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/effect"
+              },
+              "description": "same as on_hit - fires against whatever it hits."
+            }
+          },
+          "additionalProperties": false
+        },
+        "cap": {
+          "type": "object",
+          "description": "summon effect - nested cap config, preferred over the flat max_active/on_cap_exceeded keys (which still work as a fallback).",
+          "properties": {
+            "max": {
+              "type": "integer",
+              "default": 0,
+              "description": "same as max_active. 0 = uncapped."
+            },
+            "on_exceeded": {
+              "type": "string",
+              "enum": [
+                "refuse",
+                "dismiss_oldest"
+              ],
+              "description": "same as on_cap_exceeded."
+            }
+          },
+          "additionalProperties": false
+        },
+        "ai": {
+          "type": "object",
+          "description": "summon effect - nested ai config, preferred over the flat aggro_radius/follow_radius/move_speed/ai_interval_ticks keys (which still work as a fallback).",
+          "properties": {
+            "aggro_radius": {
+              "type": "number",
+              "default": 12
+            },
+            "follow_radius": {
+              "type": "number",
+              "default": 10
+            },
+            "move_speed": {
+              "type": "number",
+              "default": 1.0
+            },
+            "interval_ticks": {
+              "type": "integer",
+              "default": 10,
+              "description": "same as ai_interval_ticks."
+            }
+          },
+          "additionalProperties": false
+        },
+        "dust_color": {
+          "type": "object",
+          "description": "rain effect trail particle - 0-255 RGB, DUST only. (shape-layer's own dust_color/color is a separate per-layer field, not this one.)",
+          "properties": {
+            "r": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "g": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "additionalProperties": false
+        },
+        "landing_particle": {
+          "type": "string",
+          "description": "rain effect only - burst drawn where a drop hits terrain, even if it never touched an entity. Defaults to reusing `particle` if omitted."
+        },
+        "landing_dust_color": {
+          "type": "object",
+          "description": "rain effect only, landing_particle: DUST only - defaults to dust_color if omitted.",
+          "properties": {
+            "r": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "g": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "additionalProperties": false
+        },
+        "landing_dust_size": {
+          "type": "number",
+          "description": "rain effect only, landing_particle: DUST only - defaults to dust_size if omitted."
+        },
+        "landing_particle_count": {
+          "type": "integer",
+          "default": 10,
+          "description": "rain effect only."
+        },
+        "bounces": {
+          "type": "integer",
+          "default": 3,
+          "description": "chain effect only - how many additional jumps after the initial hit."
+        },
+        "bounce_radius": {
+          "type": "number",
+          "default": 6,
+          "description": "chain effect only - how far to search for the next target from wherever the chain currently is."
+        },
+        "falloff": {
+          "type": "number",
+          "default": 1.0,
+          "description": "chain effect only - damage multiplier per bounce, applied via DamageEffect's scale hook. 1.0 = no falloff, 0.8 = 20% less each jump. Only affects `damage` effects in the chain's own `effects:` list - other effect types have no generic 'amount' to scale."
+        },
+        "delay_ticks": {
+          "type": "integer",
+          "default": 0,
+          "description": "chain effect only (distinct from sequenceStep's own delay_ticks) - ticks between each bounce, default 0 (all bounces resolve on the same tick)."
+        },
+        "include_caster": {
+          "type": "boolean",
+          "default": false,
+          "description": "chain effect only - can the chain bounce back and hit the caster themselves."
         }
       },
       "additionalProperties": false,
@@ -689,7 +915,7 @@
         },
         "color": {
           "type": "object",
-          "description": "0-255 RGB. Only takes effect when particle/particle: DUST - silently ignored for every other particle type. (shape layer)",
+          "description": "0-255 RGB. Only takes effect when particle: DUST - silently ignored for every other particle type. `dust_color` (below) is accepted as an alias for this exact same field - either name works. (shape layer)",
           "properties": {
             "r": {
               "type": "integer",
@@ -878,6 +1104,28 @@
         "formula_z": {
           "type": "string",
           "description": "PARAMETRIC only, required if shape: parametric."
+        },
+        "dust_color": {
+          "type": "object",
+          "description": "Alias for `color` above - same RGB object, same DUST-only behavior. Matches the `dust_color` key name used by the rain/glow-adjacent effects, so either name works here without silently dropping the color (a shape layer with only `dust_color` set used to end up with no color at all before this alias existed, since the parser only read `color`).",
+          "properties": {
+            "r": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "g": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false,
