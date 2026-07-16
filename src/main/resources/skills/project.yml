@@ -75,3 +75,26 @@ skills:
       - effects:
         - type: damage
           amount: 999
+  arc_chain:
+    cooldown: 5000
+    cast_time: 300
+    targeter:
+      type: single
+      range: 20
+    interruptible: true
+    effects:
+      - type: particle
+        particle: END_ROD
+        count: 6
+      - type: chain
+        bounces: 4              # up to 4 additional jumps beyond the initial hit (5 entities total)
+        bounce_radius: 6         # each jump looks for the nearest unhit entity within 6 blocks of wherever the chain currently is
+        falloff: 0.8               # each successive hit does 80% of the previous one's damage
+        delay_ticks: 3               # ~0.15s between each jump, so it visibly hops rather than resolving instantly
+        include_caster: false
+        effects:
+          - type: damage
+            amount: 10
+          - type: particle
+            particle: CRIT
+            count: 8
