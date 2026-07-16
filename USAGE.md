@@ -461,7 +461,7 @@ Particle visual + optional hitbox. One or more animated **layers**, positioned b
  
  #### offset
  
- Constant local-space (right/up/forward, relative to caster's current facing) nudge on the anchor point, applied every tick. Distinct from a layer's `start_offset`/`end_offset` (animated, world-space, per-layer).
+ Constant local-space (right/up/forward, relative to caster's current facing) nudge on the anchor point, applied every tick. Distinct from a layer's `start_offset`/`end_offset` (animated, also facing-relative, per-layer).
  
  #### travel
  
@@ -589,7 +589,7 @@ layers:
 | `scale_axis` | `uniform` | `uniform` (x/y/z), `radial` (x/z only), `vertical` (y only) |
 | `pulsate_amplitude` / `pulsate_frequency` | 0/1.0 | Scale *= `1 + amplitude * sin(2π * frequency * elapsedSeconds)` |
 | `rise_per_sec` | 0 | Adds `rise_per_sec * elapsedSeconds` to Y each tick |
-| `start_offset` / `end_offset` | `{0,0,0}` | Animated world-space translation of layer center, lerped over duration |
+| `start_offset` / `end_offset` | `{0,0,0}` | Animated translation of layer center, lerped over duration. Facing-relative when the layer's points are (the normal case) - moves along the caster's right/up/forward, not raw world XYZ. Set both to the same value for a *static* per-layer offset instead of an animated one - e.g. staggering several arcs of one shape effect slightly apart from each other. |
 
 ---
 
