@@ -489,12 +489,22 @@ public class SkillConfigParser {
             default -> ShapeLayer.ScaleAxis.UNIFORM;
         };
 
+        // `dust_color` accepted as an alias for `color` here - `rain` (and
+        // `glow`'s... no, unrelated) uses `dust_color` for its own DUST
+        // options, and using the wrong key on a shape layer silently drops
+        // the color entirely (dustColor stays null -> DUST gets spawned
+        // with no DustOptions payload at all, which fails outright rather
+        // than falling back to some default color) - this alias means
+        // reaching for whichever name feels natural still works instead of
+        // being a trap between two effect types that use the same concept
+        // under two different names.
         Color dustColor = null;
-        if (raw.get("color") instanceof Map<?, ?> colorRaw) {
+        Object colorRaw = raw.get("color") != null ? raw.get("color") : raw.get("dust_color");
+        if (colorRaw instanceof Map<?, ?> colorMap) {
             dustColor = Color.fromRGB(
-                    clampByte(toInt(colorRaw.get("r"), 255)),
-                    clampByte(toInt(colorRaw.get("g"), 255)),
-                    clampByte(toInt(colorRaw.get("b"), 255))
+                    clampByte(toInt(colorMap.get("r"), 255)),
+                    clampByte(toInt(colorMap.get("g"), 255)),
+                    clampByte(toInt(colorMap.get("b"), 255))
             );
         }
         float dustSize = (float) toDouble(raw.get("dust_size"), 1.0);
