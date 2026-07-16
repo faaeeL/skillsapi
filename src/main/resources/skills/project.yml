@@ -1,0 +1,77 @@
+skills:
+  starfall:
+    cooldown: 0
+    cast_time: 800
+    targeter:
+      type: self
+    interruptible: true
+    telegraph:
+      particle: END_ROD
+      particle_count: 3
+      interval_ticks: 3
+    effects:
+    - type: sequence
+      steps:
+      - effects:
+        - type: shape
+          anchor: cursor_locked
+          range: 100
+          duration_ticks: 200
+          interval_ticks: 10
+          offset: { x: 0, y: 25, z: 0 } 
+          layers:
+          - shape: ring
+            particle: DUST
+            color: { r: 255, g: 255, b: 255 }
+            dust_size: 10
+            points: 100
+            radius: 25
+            rotate_deg_per_sec: 60
+        delay_ticks: 0
+        wait_for_shape_duration: false
+
+      - effects:
+        - type: rain
+          anchor: cursor_locked
+          range: 100
+          duration_ticks: 200 
+          drops_per_second: 150 
+          radius: 25 
+          height: 25 
+          speed: 1
+          gravity: true
+          collide_with_blocks: true
+          particle: DUST
+          dust_color: { r: 130, g: 180, b: 255 }
+          dust_size: 5
+          hit:
+            radius: 0.5
+            once: false
+            debug: false
+            effects:
+            - type: damage
+              amount: 20
+  instant_death:
+    cooldown: 0
+    targeter: radius
+    radius: 5
+    effects:
+    - type: sequence
+      steps:
+      - effects:
+        - type: shape
+          anchor: self
+          duration_ticks: 60
+          interval_ticks: 10
+          layers:
+          - shape: ring
+            particle: DUST
+            color: { r: 255, g: 255, b: 255 }
+            dust_size: 10
+            points: 100
+            radius: 5
+            rotate_deg_per_sec: 60
+        wait_for_shape_duration: true
+      - effects:
+        - type: damage
+          amount: 999
