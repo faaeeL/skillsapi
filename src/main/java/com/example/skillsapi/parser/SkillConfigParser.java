@@ -202,8 +202,27 @@ public class SkillConfigParser {
             case "dismiss_summons" -> new DismissSummonsEffect(summonManager);
             case "taunt" -> new TauntEffect(threatManager, toDouble(raw.get("amount"), 1000));
             case "rain" -> parseRainEffect(raw, plugin, statusManager, summonManager, threatManager);
+            case "chain" -> parseChainEffect(raw, plugin, statusManager, summonManager, threatManager);
             default -> null;
         };
+    }
+
+    /**
+     * Parses a `chain` effect: hits the current target, then repeatedly
+     * jumps to the next-nearest unhit entity - see ChainEffect's own doc
+     * comment for the full field list/semantics.
+     */
+    private static SkillEffect parseChainEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+        List<SkillEffect> effects = parseEffectList(asMapList(raw.get("effects")), plugin, statusManager, summonManager, threatManager);
+        return new ChainEffect(
+                plugin,
+                toInt(raw.get("bounces"), 3),
+                toDouble(raw.get("bounce_radius"), 6),
+                toDouble(raw.get("falloff"), 1.0),
+                toInt(raw.get("delay_ticks"), 0),
+                toBool(raw.get("include_caster"), false),
+                effects
+        );
     }
 
     /**
@@ -230,6 +249,18 @@ public class SkillConfigParser {
             );
         }
         float dustSize = (float) toDouble(raw.get("dust_size"), 1.0);
+
+        Particle landingParticle = raw.get("landing_particle") != null ? Particle.valueOf(raw.get("landing_particle").toString()) : null;
+        Color landingDustColor = null;
+        if (raw.get("landing_dust_color") instanceof Map<?, ?> landingColorRaw) {
+            landingDustColor = Color.fromRGB(
+                    clampByte(toInt(landingColorRaw.get("r"), 255)),
+                    clampByte(toInt(landingColorRaw.get("g"), 255)),
+                    clampByte(toInt(landingColorRaw.get("b"), 255))
+            );
+        }
+        float landingDustSize = (float) toDouble(raw.get("landing_dust_size"), dustSize);
+        int landingParticleCount = toInt(raw.get("landing_particle_count"), 10);
 
         int staggerMin = 0, staggerMax = 0;
         if (raw.get("stagger_ticks") instanceof Map<?, ?> staggerRaw) {
@@ -267,6 +298,10 @@ public class SkillConfigParser {
                 trailParticle,
                 dustColor,
                 dustSize,
+                landingParticle,
+                landingDustColor,
+                landingDustSize,
+                landingParticleCount,
                 staggerMin,
                 staggerMax,
                 durationTicks,
