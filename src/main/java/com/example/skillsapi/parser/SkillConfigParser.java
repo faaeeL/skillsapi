@@ -214,8 +214,11 @@ public class SkillConfigParser {
      * `shape`/`projectile` for its hit config.
      */
     private static SkillEffect parseRainEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
-        RainEffect.Anchor anchor = "self".equalsIgnoreCase(String.valueOf(raw.get("anchor")))
-                ? RainEffect.Anchor.SELF : RainEffect.Anchor.TARGET;
+        RainEffect.Anchor anchor = switch (raw.get("anchor") == null ? "cursor" : raw.get("anchor").toString().toLowerCase(Locale.ROOT)) {
+            case "self" -> RainEffect.Anchor.SELF;
+            case "cursor_locked" -> RainEffect.Anchor.CURSOR_LOCKED;
+            default -> RainEffect.Anchor.CURSOR;
+        };
 
         Particle trailParticle = raw.get("particle") != null ? Particle.valueOf(raw.get("particle").toString()) : null;
         Color dustColor = null;
