@@ -29,15 +29,24 @@ import java.util.stream.Collectors;
  * to hit_once per entity like the other travelling effects.
  *
  * Deliberately simpler than `shape`/`projectile`'s anchor system: only
- * `self` (caster's own location) and `target` (crosshair, raytraced up to
- * `range`) are supported, resolved once at cast time - a rain effect is a
- * one-shot burst over a chosen spot, not something that needs to track a
- * moving anchor the way an ongoing beam or a self-following shape does.
+ * `self` (caster's own location), `cursor` (crosshair, raytraced up to
+ * `range`, resolved fresh), and `cursor_locked` are supported.
+ * `cursor_locked` shares `ShapeEffect`'s own cursor-lock cache on the
+ * SkillContext - if an earlier `sequence` step used a `cursor_locked`
+ * shape (e.g. a telegraph ring), this reuses that *exact* resolved point
+ * instead of raytracing the crosshair again a moment later, which would
+ * drift if the caster moved or turned in between steps. Note this is
+ * deliberately named `cursor`, not `target` - `shape`'s own `target`
+ * anchor means something different (the first entity from the skill's
+ * *targeter*, not a raytraced point), and reusing that name here for a
+ * raytrace was the actual root cause of a ring-and-rain alignment bug:
+ * the two effects were anchoring to two unrelated things that happened to
+ * share a config key.
  *
  * skills.yml:
  *   - type: rain
- *     anchor: target          # self | target, default target
- *     range: 20                # target only - max raytrace distance
+ *     anchor: cursor_locked     # self | cursor | cursor_locked, default cursor
+ *     range: 20                # cursor/cursor_locked only - max raytrace distance
  *     count: 12                 # how many drops, default 10
  *     radius: 4                 # horizontal scatter radius, default 4
  *     height: 12                # spawn height above the anchor, default 12
@@ -57,7 +66,7 @@ import java.util.stream.Collectors;
  */
 public class RainEffect implements SkillEffect {
 
-    public enum Anchor { SELF, TARGET }
+    public enum Anchor { SELF, CURSOR, CURSOR_LOCKED }
 
     private final Plugin plugin;
     private final Anchor anchor;
@@ -103,7 +112,7 @@ public class RainEffect implements SkillEffect {
     @Override
     public void apply(SkillContext context) {
         LivingEntity caster = context.getCaster();
-        Location origin = resolveOrigin(caster);
+        Location origin = resolveOrigin(caster, context);
         if (origin == null) return; // target anchor with nothing in range - fizzle, same convention as `single`
 
         World world = origin.getWorld();
@@ -190,11 +199,34 @@ public class RainEffect implements SkillEffect {
         }.runTaskTimer(plugin, 0L, 1L);
     }
 
-    private Location resolveOrigin(LivingEntity caster) {
+    private Location resolveOrigin(LivingEntity caster, SkillContext context) {
         if (anchor == Anchor.SELF) {
             return caster.getLocation();
         }
 
+        if (anchor == Anchor.CURSOR_LOCKED) {
+            // Shares ShapeEffect's own cursor-lock key: if an earlier
+            // `sequence` step already resolved+cached a cursor_locked shape
+            // anchor on this same SkillContext, this reuses that *exact*
+            // point rather than raytracing the crosshair again - which
+            // would drift from the shape's position if the caster moved or
+            // turned in between steps. If nothing cached it yet (a `rain`
+            // used standalone, with no preceding cursor_locked shape),
+            // falls through to resolving + caching it itself, so it's
+            // still fully usable on its own.
+            Object cached = context.get(ShapeEffect.CURSOR_LOCK_KEY);
+            if (cached instanceof Location cachedLoc) {
+                return cachedLoc.clone();
+            }
+            Location resolved = raytraceCrosshair(caster);
+            context.put(ShapeEffect.CURSOR_LOCK_KEY, resolved.clone());
+            return resolved;
+        }
+
+        return raytraceCrosshair(caster);
+    }
+
+    private Location raytraceCrosshair(LivingEntity caster) {
         Location eye = caster.getEyeLocation();
         RayTraceResult hit = caster.getWorld().rayTraceBlocks(eye, eye.getDirection(), range,
                 FluidCollisionMode.NEVER, true);
