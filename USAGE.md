@@ -461,7 +461,7 @@ Particle visual + optional hitbox. One or more animated **layers**, positioned b
  
  #### offset
  
- Constant local-space (right/up/forward, relative to caster's current facing) nudge on the anchor point, applied every tick. Distinct from a layer's `start_offset`/`end_offset` (animated, also facing-relative, per-layer).
+ `offsetX`/`offsetZ` are local-space (right/forward, relative to caster's current facing); `offsetY` is plain world-Y, not local "up" (which tilts away from true vertical whenever the caster isn't looking exactly level) - "1.5 blocks up" always means 1.5 blocks of real height. Applied to the anchor point every tick. Distinct from a layer's `start_offset`/`end_offset` (animated, fully facing-relative including its own Y, per-layer).
  
  #### travel
  
@@ -625,8 +625,8 @@ Chains stages of effects with delays between them.
 ### rain
 ```yaml
 - type: rain
-  anchor: target          # self | target, default target
-  range: 20                 # target only - max raytrace distance
+  anchor: cursor_locked      # self | cursor | cursor_locked, default cursor
+  range: 20                 # cursor/cursor_locked only - max raytrace distance
   count: 12                  # how many drops, default 10
   radius: 4                   # horizontal scatter radius around the anchor, default 4
   height: 12                   # spawn height above the anchor, default 12
@@ -646,9 +646,9 @@ Chains stages of effects with delays between them.
 ```
 `count` independent drops, each scattered to a random point within `radius` of the anchor (uniform across the disk's *area*, not bunched toward the center), spawned `height` blocks up, and falling straight down - each on its own random `stagger_ticks` delay so they don't all launch on the same tick, which is what actually reads as rain instead of a synchronized volley. Each drop is its own miniature simulated projectile: own trail particle, own block-collision check (raytraced across each tick's fall distance, `ignorePassableBlocks: false` - so it stops on stairs/slabs/fences too, not just full blocks), own small `hit_radius` + `on_hit` payload, capped to `hit_once` per entity same as `shape`/`projectile`.
 
-- `anchor: self` centers the scatter on the caster's own location; `anchor: target` (default) raytraces from the caster's crosshair up to `range` and centers on whatever that hits (block or open air at max range) - resolved once at cast time, not tracked live.
+- `anchor: self` centers the scatter on the caster's own location. `anchor: cursor` raytraces the caster's crosshair up to `range` and centers on whatever that hits (block or open air at max range), resolved fresh each time. `anchor: cursor_locked` does the same raytrace, but shares `shape`'s own cursor-lock cache on the SkillContext - if an earlier `sequence` step used a `cursor_locked` shape (e.g. a telegraph ring), this reuses that *exact* resolved point instead of raytracing the crosshair again a moment later, which would drift apart if the caster moved or turned in between steps. Deliberately not named `target` - `shape`'s own `target` anchor means something different (the first entity from the skill's *targeter*, not a raytraced point); reusing that name here for a raytrace would silently anchor `rain` and a `shape` to two unrelated things any time the skill's targeter isn't also crosshair-based.
 - `hit:` follows the same nested-block-with-flat-key-fallback convention as `shape`/`projectile` (`hit.radius`/`hit_radius`, `hit.once`/`hit_once`, `hit.effects`/`on_hit`).
-- Pairs naturally with a `shape` (`ring`, `offset: {y: <height>}`) telegraphing the drop zone first, then a `sequence` step later triggering the `rain` itself - see the worked example at the end of this doc.
+- Pairs naturally with a `shape` (`ring`, `anchor: cursor_locked`, `offset: {y: <height>}`) telegraphing the drop zone first, then a `sequence` step later triggering a `rain` with the same `anchor: cursor_locked` + matching `radius`/`height` - see the worked example at the end of this doc. Match `radius` and `height` between the two, and use `cursor_locked` (not `cursor`) on both, or the ring and the rain won't line up.
 - No per-drop max-fall-distance config; each drop self-cancels once it's fallen roughly `height * 4 + 64` blocks with no collision (a generous safety cap for an anchor with no ground under it, e.g. over a void), not a tunable gameplay parameter.
 
 
