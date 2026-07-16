@@ -643,6 +643,7 @@ Chains stages of effects with delays between them.
   hit:
     radius: 1.0
     once: true
+    debug: false          # or top-level debug_hitbox: true - red DUST wireframe sphere around each falling drop's live hit_radius
     effects:
       - type: damage
         amount: 6
@@ -654,7 +655,7 @@ Two modes, chosen by whether `duration_ticks` is set:
 `count` independent drops, each scattered to a random point within `radius` of the anchor (uniform across the disk's *area*, not bunched toward the center), spawned `height` blocks up, and falling straight down. Each drop is its own miniature simulated projectile: own trail particle, own block-collision check (raytraced across each tick's fall distance, `ignorePassableBlocks: false` - so it stops on stairs/slabs/fences too, not just full blocks), own small `hit_radius` + `on_hit` payload, capped to `hit_once` per entity same as `shape`/`projectile`.
 
 - `anchor: self` centers the scatter on the caster's own location. `anchor: cursor` raytraces the caster's crosshair up to `range` and centers on whatever that hits (block or open air at max range), resolved fresh each time. `anchor: cursor_locked` does the same raytrace, but shares `shape`'s own cursor-lock cache on the SkillContext - if an earlier `sequence` step used a `cursor_locked` shape (e.g. a telegraph ring), this reuses that *exact* resolved point instead of raytracing the crosshair again a moment later, which would drift apart if the caster moved or turned in between steps. Deliberately not named `target` - `shape`'s own `target` anchor means something different (the first entity from the skill's *targeter*, not a raytraced point); reusing that name here for a raytrace would silently anchor `rain` and a `shape` to two unrelated things any time the skill's targeter isn't also crosshair-based.
-- `hit:` follows the same nested-block-with-flat-key-fallback convention as `shape`/`projectile` (`hit.radius`/`hit_radius`, `hit.once`/`hit_once`, `hit.effects`/`on_hit`).
+- `hit:` follows the same nested-block-with-flat-key-fallback convention as `shape`/`projectile` (`hit.radius`/`hit_radius`, `hit.once`/`hit_once`, `hit.debug`/`debug_hitbox`, `hit.effects`/`on_hit`). `debug_hitbox` draws the same red `DUST` wireframe-sphere convention `shape` uses, redrawn every tick around each drop's current position - since each drop is its own independent falling point rather than one shared shape, there's no `debug_hitbox_points` count to tune here; it's fixed.
 - Pairs naturally with a `shape` (`ring`, `anchor: cursor_locked`, `offset: {y: <height>}`) telegraphing the drop zone first, then a `sequence` step later triggering a `rain` with the same `anchor: cursor_locked` + matching `radius`/`height` - see the worked example at the end of this doc. Match `radius` and `height` between the two, use `cursor_locked` (not `cursor`) on both, and if you want the ring to stay visible for the whole storm, match the ring's `duration_ticks` to the rain's `duration_ticks` too.
 - No per-drop max-fall-distance config; each drop self-cancels once it's fallen roughly `height * 4 + 64` blocks with no collision (a generous safety cap for an anchor with no ground under it, e.g. over a void), not a tunable gameplay parameter.
 

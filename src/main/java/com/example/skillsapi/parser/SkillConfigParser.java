@@ -249,6 +249,7 @@ public class SkillConfigParser {
         Map<?, ?> hitRaw = raw.get("hit") instanceof Map<?, ?> m ? m : null;
         double hitRadius = toDouble(hitRaw != null && hitRaw.get("radius") != null ? hitRaw.get("radius") : raw.get("hit_radius"), 1.0);
         boolean hitOnce = toBool(hitRaw != null && hitRaw.get("once") != null ? hitRaw.get("once") : raw.get("hit_once"), true);
+        boolean debugHitbox = toBool(hitRaw != null && hitRaw.get("debug") != null ? hitRaw.get("debug") : raw.get("debug_hitbox"), false);
         Object onHitSource = hitRaw != null && hitRaw.get("effects") != null ? hitRaw.get("effects") : raw.get("on_hit");
         List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager);
 
@@ -271,6 +272,7 @@ public class SkillConfigParser {
                 durationTicks,
                 hitRadius,
                 hitOnce,
+                debugHitbox,
                 onHit
         );
     }

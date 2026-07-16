@@ -1,5 +1,6 @@
 package com.example.skillsapi.effect;
 
+import com.example.skillsapi.shape.ShapeGenerator;
 import com.example.skillsapi.skill.SkillContext;
 import com.example.skillsapi.skill.SkillEffect;
 import org.bukkit.Color;
@@ -87,6 +88,7 @@ public class RainEffect implements SkillEffect {
     private final int durationTicks;
     private final double hitRadius;
     private final boolean hitOnce;
+    private final boolean debugHitbox;
     private final List<SkillEffect> onHitEffects;
 
     public RainEffect(Plugin plugin, Anchor anchor, double range, Integer explicitCount, double dropsPerSecond,
@@ -94,7 +96,7 @@ public class RainEffect implements SkillEffect {
                        double speedBlocksPerSecond, boolean gravity, boolean collideWithBlocks,
                        Particle trailParticle, Color dustColor, float dustSize,
                        int staggerMinTicks, int staggerMaxTicks, int durationTicks,
-                       double hitRadius, boolean hitOnce, List<SkillEffect> onHitEffects) {
+                       double hitRadius, boolean hitOnce, boolean debugHitbox, List<SkillEffect> onHitEffects) {
         this.plugin = plugin;
         this.anchor = anchor;
         this.range = range;
@@ -113,6 +115,7 @@ public class RainEffect implements SkillEffect {
         this.durationTicks = Math.max(0, durationTicks);
         this.hitRadius = hitRadius;
         this.hitOnce = hitOnce;
+        this.debugHitbox = debugHitbox;
         this.onHitEffects = onHitEffects;
     }
 
@@ -195,6 +198,20 @@ public class RainEffect implements SkillEffect {
                         current.getWorld().spawnParticle(trailParticle, current, 1, 0, 0, 0, 0, dustOptions);
                     } else {
                         current.getWorld().spawnParticle(trailParticle, current, 2, 0.05, 0.05, 0.05, 0);
+                    }
+                }
+
+                if (debugHitbox && hitRadius > 0) {
+                    // Same convention as `shape`'s own debug_hitbox: red DUST
+                    // wireframe drawn at the *exact* geometry the hit test
+                    // below actually uses (a sphere of radius hit_radius
+                    // centered on `current`), not just a rough approximation
+                    // - and, same as shape, visible to everyone regardless
+                    // of the drop's own visibility, since it's a debug
+                    // overlay rather than a gameplay particle.
+                    Particle.DustOptions debugDust = new Particle.DustOptions(Color.RED, 1.0F);
+                    for (Vector offset : ShapeGenerator.wireframeSphere(12, hitRadius)) {
+                        current.getWorld().spawnParticle(Particle.DUST, current.clone().add(offset), 1, 0, 0, 0, 0, debugDust);
                     }
                 }
 
