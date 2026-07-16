@@ -14,7 +14,7 @@ Reference for `skills/*.yml` and `resources.yml`. Generated from `SkillConfigPar
 6. [Cost & resources](#cost--resources)
 7. [Cast time, interrupts, telegraph](#cast-time-interrupts-telegraph)
 8. [Effects](#effects)
-   - [damage](#damage) · [heal](#heal) · [particle](#particle) · [potion](#potion) · [knockback](#knockback)
+   - [damage](#damage) · [heal](#heal) · [particle](#particle) · [potion](#potion) · [glow](#glow) · [knockback](#knockback)
    - [status](#status-effect)
    - [projectile](#projectile)
    - [summon](#summon) · [dismiss_summons](#summon)
@@ -288,6 +288,15 @@ Spawns at each target's location +1 block up, (0.3,0.3,0.3) spread. One-shot onl
   duration_ticks: 100             # default 100
   amplifier: 0                    # default 0
 ```
+
+### glow
+```yaml
+- type: glow
+  color: RED           # any org.bukkit.ChatColor name, default WHITE
+  duration_ticks: 100  # default 100
+```
+Vanilla `GLOWING` (see [potion](#potion) above) has no color of its own - the outline color is entirely controlled by whatever scoreboard team the entity belongs to. `glow` is the effect that actually makes a *colored* glow possible: it gets-or-creates a shared, permanently-registered scoreboard team per color (`skillsapi_glow_<COLOR>`), adds the target to it, applies ordinary `GLOWING` on top, and removes just that target's entry from the team again once `duration_ticks` elapses. The team itself is never deleted - it's shared by every `glow` effect using that color, on any entity, for as long as the plugin is loaded.
+- If a target is already glowing a different color when a new `glow` effect is applied, both team memberships can briefly overlap - Minecraft resolves that using whichever team assignment the client currently has last, so stacking two different `glow` colors on the same entity back-to-back isn't a reliable way to get a specific final color; space them out or don't overlap durations if the exact color matters.
 
 ### knockback
 ```yaml
