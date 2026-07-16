@@ -33,7 +33,15 @@ import java.util.List;
  *   5. its own center is nudged by a {@code start_offset -> end_offset}
  *      lerp over the same duration - lets a layer's position (not just its
  *      size) animate, e.g. sliding in from off to the side or dropping down
- *      from high overhead.
+ *      from high overhead. When this layer's points are facing-relative
+ *      (the normal case), the offset itself is too - it moves along the
+ *      caster's right/up/forward, not raw world XYZ, so e.g. "shift this
+ *      layer to the right" stays correct as the caster turns instead of
+ *      only being correct for one fixed world direction. Setting
+ *      {@code start_offset} and {@code end_offset} to the same value gives
+ *      a static per-layer offset instead of an animated one - useful for
+ *      staggering multiple layers of one shape effect side by side (e.g. a
+ *      slash built from several arcs slightly offset from each other).
  *   6. it's placed relative to the effect's current center location.
  */
 public class ShapeLayer {
@@ -173,8 +181,20 @@ public class ShapeLayer {
             }
             world_.setY(world_.getY() + rise);
 
-            out.add(new Location(world, center.getX() + world_.getX() + offX,
-                    center.getY() + world_.getY() + offY, center.getZ() + world_.getZ() + offZ));
+            // Facing-relative when the layer's own points are (the normal
+            // case): offX/Y/Z move along the caster's right/up/forward, the
+            // same basis the shape itself is drawn in, so "shift this layer
+            // slightly to the right" stays correct as the caster turns,
+            // instead of only being correct for whichever way they happened
+            // to be facing when the numbers were written. Falls back to raw
+            // world-space when facingRelative is false, matching how this
+            // layer's base points already behave in that mode.
+            Vector offset = facingRelative
+                    ? right.clone().multiply(offX).add(up.clone().multiply(offY)).add(forward.clone().multiply(offZ))
+                    : new Vector(offX, offY, offZ);
+
+            out.add(new Location(world, center.getX() + world_.getX() + offset.getX(),
+                    center.getY() + world_.getY() + offset.getY(), center.getZ() + world_.getZ() + offset.getZ()));
         }
         return out;
     }
