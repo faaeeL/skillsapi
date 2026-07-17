@@ -14,6 +14,7 @@ import com.example.skillsapi.skill.Targeter;
 import com.example.skillsapi.skill.Telegraph;
 import com.example.skillsapi.status.DashStatusBehavior;
 import com.example.skillsapi.status.FrozenStatusBehavior;
+import com.example.skillsapi.status.ShieldStatusBehavior;
 import com.example.skillsapi.status.Status;
 import com.example.skillsapi.status.StatusBehavior;
 import com.example.skillsapi.status.StatusManager;
@@ -196,6 +197,7 @@ public class SkillConfigParser {
             case "knockback" -> new KnockbackEffect(toDouble(raw.get("strength"), 1));
             case "status" -> parseStatusEffect(raw, plugin, statusManager, summonManager, threatManager);
             case "projectile" -> parseProjectile(raw, plugin, statusManager, summonManager, threatManager);
+            case "hound" -> parseHound(raw, plugin, statusManager, summonManager, threatManager);
             case "shape" -> parseShapeEffect(raw, plugin, statusManager, summonManager, threatManager);
             case "sequence" -> parseSequenceEffect(raw, plugin, statusManager, summonManager, threatManager);
             case "summon" -> parseSummon(raw, plugin, statusManager, summonManager, threatManager);
@@ -666,6 +668,7 @@ public class SkillConfigParser {
                     toBool(raw.get("disable_gravity"), true)
             );
             case "frozen" -> new FrozenStatusBehavior();
+            case "shield" -> new ShieldStatusBehavior(toDouble(raw.get("absorption"), 20));
             default -> null;
         };
 
@@ -721,6 +724,46 @@ public class SkillConfigParser {
                 hitRadius,
                 pierce,
                 toBool(raw.get("gravity"), false),
+                toBool(raw.get("collide_with_blocks"), true),
+                onHit
+        );
+    }
+
+    /**
+     * skills.yml:
+     *   - type: hound
+     *     particle: SOUL
+     *     speed: 12
+     *     max_distance: 30
+     *     hit_radius: 1.0
+     *     lock_radius: 20          # how far away it'll pick a mark at cast time
+     *     turn_degrees_per_tick: 6 # higher = harder to outrun/juke
+     *     collide_with_blocks: true
+     *     effects: [ ... ]        # same nested-effects convention as projectile
+     *
+     * A homing tracker rather than a straight bolt - see
+     * HoundProjectileEffect's own doc comment for how the lock and steering
+     * work, and why the turn-rate limit is what keeps it dodgeable instead
+     * of a guaranteed hit.
+     */
+    private static SkillEffect parseHound(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+        Particle particle = raw.get("particle") != null
+                ? Particle.valueOf(raw.get("particle").toString())
+                : null;
+
+        Map<?, ?> hitRaw = raw.get("hit") instanceof Map<?, ?> m ? m : null;
+        Object onHitSource = hitRaw != null && hitRaw.get("effects") != null ? hitRaw.get("effects") : raw.get("effects");
+        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager);
+        double hitRadius = toDouble(hitRaw != null && hitRaw.get("radius") != null ? hitRaw.get("radius") : raw.get("hit_radius"), 1.0);
+
+        return new HoundProjectileEffect(
+                plugin,
+                particle,
+                toDouble(raw.get("speed"), 12),
+                toDouble(raw.get("max_distance"), 25),
+                hitRadius,
+                toDouble(raw.get("lock_radius"), 20),
+                toDouble(raw.get("turn_degrees_per_tick"), 6),
                 toBool(raw.get("collide_with_blocks"), true),
                 onHit
         );
