@@ -4,6 +4,7 @@ import com.example.skillsapi.command.CastCommand;
 import com.example.skillsapi.command.SkillsApiCommand;
 import com.example.skillsapi.listener.CastInterruptListener;
 import com.example.skillsapi.listener.MobTriggerListener;
+import com.example.skillsapi.listener.ShieldDamageListener;
 import com.example.skillsapi.listener.SkillItemListener;
 import com.example.skillsapi.listener.SummonTargetListener;
 import com.example.skillsapi.listener.ThreatListener;
@@ -67,6 +68,7 @@ public class SkillsPlugin extends JavaPlugin {
         mobInstanceManager = new MobInstanceManager(this, skillManager);
 
         getServer().getPluginManager().registerEvents(new CastInterruptListener(castManager), this);
+        getServer().getPluginManager().registerEvents(new ShieldDamageListener(statusManager), this);
         getServer().getPluginManager().registerEvents(
                 new SkillItemListener(this, skillManager, resourceManager, castEngine), this);
         getServer().getPluginManager().registerEvents(new SummonTargetListener(this, summonManager), this);
