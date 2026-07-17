@@ -53,6 +53,20 @@ public class StatusManager {
         return perEntity != null && perEntity.containsKey(statusId.toLowerCase());
     }
 
+    /**
+     * The same scratch state map a running status's StatusBehavior gets
+     * passed on every onStart/onTick/onExpire call - null if the status
+     * isn't active. Lets something outside the tick loop (e.g. a damage
+     * listener reading a shield's remaining absorption) read or mutate the
+     * live instance's data without needing its own onTick hook.
+     */
+    public Map<String, Object> getState(LivingEntity entity, String statusId) {
+        Map<String, Instance> perEntity = active.get(entity.getUniqueId());
+        if (perEntity == null) return null;
+        Instance instance = perEntity.get(statusId.toLowerCase());
+        return instance == null ? null : instance.state();
+    }
+
     /** Applies (or, if already active and refreshable, restarts) a status on an entity. */
     public void apply(LivingEntity entity, Status status) {
         String key = status.id().toLowerCase();
