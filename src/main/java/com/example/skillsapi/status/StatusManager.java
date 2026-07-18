@@ -54,6 +54,30 @@ public class StatusManager {
     }
 
     /**
+     * The state map of whichever active status on this entity has a
+     * behavior of the given type - not tied to a specific status id, since
+     * that id is whatever a skill's config happened to name it (e.g.
+     * "barrier", "aegis", "shield"). Returns null if no active status on
+     * this entity currently uses that behavior class.
+     */
+    public Map<String, Object> getStateByBehavior(LivingEntity entity, Class<? extends StatusBehavior> behaviorType) {
+        String id = getActiveStatusIdByBehavior(entity, behaviorType);
+        return id == null ? null : getState(entity, id);
+    }
+
+    /** The status id (whatever it was registered/applied under) of the first active status on this entity with a behavior of the given type, or null. */
+    public String getActiveStatusIdByBehavior(LivingEntity entity, Class<? extends StatusBehavior> behaviorType) {
+        Map<String, Instance> perEntity = active.get(entity.getUniqueId());
+        if (perEntity == null) return null;
+        for (Map.Entry<String, Instance> entry : perEntity.entrySet()) {
+            if (behaviorType.isInstance(entry.getValue().status().behavior())) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    /**
      * The same scratch state map a running status's StatusBehavior gets
      * passed on every onStart/onTick/onExpire call - null if the status
      * isn't active. Lets something outside the tick loop (e.g. a damage
