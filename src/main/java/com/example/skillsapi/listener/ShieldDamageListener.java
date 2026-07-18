@@ -11,16 +11,16 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import java.util.Map;
 
 /**
- * Any entity with an active "shield" status has incoming damage drained
- * from its absorption pool here instead of applied normally. Runs at HIGH,
- * before CastInterruptListener's MONITOR pass, so a fully-absorbed hit
- * (zeroed out below) doesn't also interrupt whatever the shielded entity
- * is channeling.
+ * Any entity with an active status whose behavior is ShieldStatusBehavior
+ * has incoming damage drained from its absorption pool here instead of
+ * applied normally. Matched by behavior type, not by a fixed status id -
+ * a skill can register its shield under any id it wants ("barrier",
+ * "aegis", "shield", whatever), same as dash/frozen aren't tied to one
+ * either, and this listener still finds it.
  *
- * Whichever skill inflicted the shield status decides what "shield" means
- * via its own on_start/on_expire hooks in skills.yml (a barrier going up,
- * glass shattering when it breaks) - this listener only owns the number
- * going down.
+ * Runs at HIGH, before CastInterruptListener's MONITOR pass, so a
+ * fully-absorbed hit (zeroed out below) doesn't also interrupt whatever
+ * the shielded entity is channeling.
  */
 public class ShieldDamageListener implements Listener {
 
@@ -36,7 +36,10 @@ public class ShieldDamageListener implements Listener {
         double incoming = event.getFinalDamage();
         if (incoming <= 0) return;
 
-        Map<String, Object> state = statusManager.getState(entity, "shield");
+        String statusId = statusManager.getActiveStatusIdByBehavior(entity, ShieldStatusBehavior.class);
+        if (statusId == null) return;
+
+        Map<String, Object> state = statusManager.getState(entity, statusId);
         if (state == null) return;
 
         Object stored = state.get(ShieldStatusBehavior.ABSORPTION_KEY);
@@ -51,7 +54,7 @@ public class ShieldDamageListener implements Listener {
             event.setDamage(leftover);
             // Breaks it now rather than waiting for duration_ticks to run
             // out - fires on_expire (e.g. a shatter effect) immediately.
-            statusManager.remove(entity, "shield");
+            statusManager.remove(entity, statusId);
         }
     }
 }
