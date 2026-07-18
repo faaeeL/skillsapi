@@ -17,6 +17,7 @@ Reference for `skills/*.yml` and `resources.yml`. Generated from `SkillConfigPar
    - [damage](#damage) · [heal](#heal) · [particle](#particle) · [potion](#potion) · [glow](#glow) · [knockback](#knockback) · [rain](#rain) · [chain](#chain)
    - [status](#status-effect)
    - [projectile](#projectile)
+   - [hound](#hound)
    - [summon](#summon) · [dismiss_summons](#summon)
    - [taunt](#taunt)
    - [shape](#shape)
@@ -343,6 +344,23 @@ See [Statuses](#statuses). Applies to `context.getTargets()`.
         amount: 12
 ```
 Simulated point, moves from caster's eye along look direction. `hit.pierce` = max entities hit before stopping. `hit.effects` can nest any effect type, including another `projectile` or `shape`.
+
+### hound
+```yaml
+- type: hound
+  particle: SOUL_FIRE_FLAME    # optional trail
+  speed: 12                     # blocks/sec, default 12
+  max_distance: 25              # default 25
+  lock_radius: 20               # default 20
+  turn_degrees_per_tick: 6      # default 6
+  collide_with_blocks: true     # default true
+  hit:
+    radius: 1.0                # default 1.0
+    effects:                   # required
+      - type: damage
+        amount: 14
+```
+A homing `projectile`: locks the nearest living entity within `lock_radius` of the caster at cast time (never re-targets mid-flight), then steers toward that mark every tick, bending by at most `turn_degrees_per_tick` rather than snapping straight at it. That turn-rate cap is what keeps it dodgeable - a target that cuts a sharp enough angle, or breaks line of sight around cover, can still out-turn it. No mark found within `lock_radius` at cast time falls back to flying straight, same as `projectile`. Unlike `projectile`, `hit.pierce` doesn't apply - it stops on its first real hit. See `skills/world_trigger.yml`'s `hound` skill.
 
 ### summon
 ```yaml
@@ -691,25 +709,32 @@ Fires `effects:` against the skill's current target, then repeatedly jumps to th
 ```yaml
 statuses:
   frozen:
-    behavior:
-      type: frozen             # dash | frozen | omit for cosmetic
+    behavior: frozen             # dash | frozen | shield | omit for cosmetic
     duration_ticks: 60            # -1 = indefinite
     tick_interval_ticks: 5
     refreshable: true              # default true
     on_start: [...]
     on_tick: [...]
     on_expire: [...]
+
+  barrier:                        # any id you want - not read by the game logic
+    behavior: shield
+    absorption: 40                 # damage points it can soak before breaking
+    duration_ticks: 200            # breaks on this timeout even if never hit
 ```
 
 Effects in `on_start`/`on_tick`/`on_expire` run with the affected entity as both caster and sole target.
 
-| `behavior.type` | Extra fields (in `behavior:` map) | Effect |
+| `behavior` | Extra fields | Effect |
 |---|---|---|
 | `dash` | `distance` (6), `horizontal_only` (true), `disable_gravity` (true) | Constant-speed shove for `duration_ticks`, covering `distance` blocks. Direction: held movement key (players) → existing velocity → look direction. Uses vanilla collision. |
 | `frozen` | - | Zeroes velocity every tick |
+| `shield` | `absorption` (20) | Soaks the next `absorption` total damage from any source (mob attacks, fall, other skills, ...) down to 0 before any of it reaches the entity; the hit that empties the pool clips off just the leftover and breaks the shield early (fires `on_expire`), even if `duration_ticks` hasn't run out yet |
 | *(omitted)* | - | Cosmetic only (hooks, no lock) |
 
 `duration_ticks: -1` = never auto-expires; needs explicit removal.
+
+`shield` is matched by *behavior type*, not by the status's id - `ShieldDamageListener` checks every entity that takes damage for any active status whose `behavior: shield`, whatever you named it (`barrier`, `aegis`, `shield`, doesn't matter). Point two differently-named `shield`-behavior statuses at two different skills (e.g. a small self-cast one and a bigger ally-cast one) and both still get drained correctly - there's no single hardcoded status id it's waiting for.
 
 ---
 
