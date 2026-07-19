@@ -34,6 +34,12 @@ import java.util.stream.Collectors;
  * direction each tick, not a true spherical slerp - close enough at the
  * small per-tick turn angles this is meant to be configured with (a few
  * degrees), and much cheaper to compute every tick for every in-flight hound.
+ *
+ * `count` > 1 releases a pack instead of a single hound: every one locks
+ * the *same* mark (found once, up front - a pack doesn't split up onto
+ * different targets), fanned out at launch across spread_degrees the same
+ * way ProjectileEffect's volley is, then each independently steers and
+ * converges on that shared mark from its own starting angle.
  */
 public class HoundProjectileEffect implements SkillEffect {
 
@@ -45,12 +51,14 @@ public class HoundProjectileEffect implements SkillEffect {
     private final double lockRadius;
     private final double turnDegreesPerTick;
     private final boolean collideWithBlocks;
+    private final int count;
+    private final double spreadDegrees;
     private final List<SkillEffect> onHitEffects;
 
     public HoundProjectileEffect(Plugin plugin, Particle trailParticle, double speedBlocksPerSecond,
                                   double maxDistance, double hitRadius, double lockRadius,
                                   double turnDegreesPerTick, boolean collideWithBlocks,
-                                  List<SkillEffect> onHitEffects) {
+                                  int count, double spreadDegrees, List<SkillEffect> onHitEffects) {
         this.plugin = plugin;
         this.trailParticle = trailParticle;
         this.speedPerTick = speedBlocksPerSecond / 20.0;
@@ -59,6 +67,8 @@ public class HoundProjectileEffect implements SkillEffect {
         this.lockRadius = lockRadius;
         this.turnDegreesPerTick = turnDegreesPerTick;
         this.collideWithBlocks = collideWithBlocks;
+        this.count = Math.max(1, count);
+        this.spreadDegrees = spreadDegrees;
         this.onHitEffects = onHitEffects;
     }
 
@@ -66,16 +76,36 @@ public class HoundProjectileEffect implements SkillEffect {
     public void apply(SkillContext context) {
         LivingEntity caster = context.getCaster();
         Location origin = caster.getEyeLocation();
-        Vector velocity = origin.getDirection().normalize().multiply(speedPerTick);
+        Vector forward = origin.getDirection().normalize();
 
+        // One shared mark for the whole pack - found once, not re-picked per hound.
         LivingEntity mark = findMark(caster, origin);
         double maxTurnRadians = Math.toRadians(turnDegreesPerTick);
 
+        for (int i = 0; i < count; i++) {
+            double angleOffset = count == 1 ? 0 : (-spreadDegrees / 2.0) + (spreadDegrees * i / (count - 1));
+            Vector heading = rotateAroundVerticalAxis(forward, angleOffset).multiply(speedPerTick);
+            launch(caster, context, origin.clone(), heading, mark, maxTurnRadians);
+        }
+    }
+
+    /** Rotates a direction vector around the world's vertical (Y) axis - a horizontal-only fan, pitch untouched. */
+    private static Vector rotateAroundVerticalAxis(Vector direction, double degrees) {
+        double radians = Math.toRadians(degrees);
+        double cos = Math.cos(radians);
+        double sin = Math.sin(radians);
+        double x = direction.getX() * cos - direction.getZ() * sin;
+        double z = direction.getX() * sin + direction.getZ() * cos;
+        return new Vector(x, direction.getY(), z);
+    }
+
+    private void launch(LivingEntity caster, SkillContext context, Location origin, Vector initialHeading,
+                         LivingEntity mark, double maxTurnRadians) {
         new BukkitRunnable() {
-            private final Location current = origin.clone();
+            private final Location current = origin;
             private double travelled = 0;
             private final Set<LivingEntity> alreadyHit = new HashSet<>();
-            private Vector heading = velocity.clone();
+            private Vector heading = initialHeading;
 
             @Override
             public void run() {
@@ -139,7 +169,7 @@ public class HoundProjectileEffect implements SkillEffect {
         }.runTaskTimer(plugin, 0L, 1L);
     }
 
-    /** Nearest living entity (excluding the caster) within lockRadius of the cast origin - the mark for the whole flight, never reacquired. */
+    /** Nearest living entity (excluding the caster) within lockRadius of the cast origin - the mark for the whole flight/pack, never reacquired. */
     private LivingEntity findMark(LivingEntity caster, Location origin) {
         return origin.getWorld().getNearbyLivingEntities(origin, lockRadius).stream()
                 .filter(e -> !e.equals(caster))
