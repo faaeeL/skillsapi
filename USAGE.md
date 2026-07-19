@@ -18,6 +18,7 @@ Reference for `skills/*.yml` and `resources.yml`. Generated from `SkillConfigPar
    - [status](#status-effect)
    - [projectile](#projectile)
    - [hound](#hound)
+   - [deploy / detonate](#deploy--detonate)
    - [summon](#summon) · [dismiss_summons](#summon)
    - [taunt](#taunt)
    - [shape](#shape)
@@ -336,6 +337,8 @@ See [Statuses](#statuses). Applies to `context.getTargets()`.
   max_distance: 20              # default 20
   gravity: false                 # default false
   collide_with_blocks: true      # default true
+  count: 1                        # how many fired at once, default 1
+  spread_degrees: 0               # horizontal fan width across `count` shots, default 0
   hit:
     radius: 1.0                # default 1.0
     pierce: 1                  # default 1
@@ -344,6 +347,8 @@ See [Statuses](#statuses). Applies to `context.getTargets()`.
         amount: 12
 ```
 Simulated point, moves from caster's eye along look direction. `hit.pierce` = max entities hit before stopping. `hit.effects` can nest any effect type, including another `projectile` or `shape`.
+
+`count > 1` fires a volley: `count` fully independent projectiles (own trail, own pierce budget, own hits), fanned out horizontally across `spread_degrees` and centered on the caster's look direction - e.g. `count: 3, spread_degrees: 30` fires at -15°/0°/+15°. `count: 1` (the default) ignores `spread_degrees` and fires a single straight shot, unchanged from before these fields existed.
 
 ### hound
 ```yaml
@@ -354,13 +359,41 @@ Simulated point, moves from caster's eye along look direction. `hit.pierce` = ma
   lock_radius: 20               # default 20
   turn_degrees_per_tick: 6      # default 6
   collide_with_blocks: true     # default true
+  count: 1                       # how many released at once, default 1
+  spread_degrees: 0              # launch fan across `count` hounds, default 0
   hit:
     radius: 1.0                # default 1.0
     effects:                   # required
       - type: damage
         amount: 14
 ```
-A homing `projectile`: locks the nearest living entity within `lock_radius` of the caster at cast time (never re-targets mid-flight), then steers toward that mark every tick, bending by at most `turn_degrees_per_tick` rather than snapping straight at it. That turn-rate cap is what keeps it dodgeable - a target that cuts a sharp enough angle, or breaks line of sight around cover, can still out-turn it. No mark found within `lock_radius` at cast time falls back to flying straight, same as `projectile`. Unlike `projectile`, `hit.pierce` doesn't apply - it stops on its first real hit. See `skills/world_trigger.yml`'s `hound` skill.
+A homing `projectile`: locks the nearest living entity within `lock_radius` of the caster at cast time (never re-targets mid-flight), then steers toward that mark every tick, bending by at most `turn_degrees_per_tick` rather than snapping straight at it. That turn-rate cap is what keeps it dodgeable - a target that cuts a sharp enough angle, or breaks line of sight around cover, can still out-turn it. No mark found within `lock_radius` at cast time falls back to flying straight, same as `projectile`. Unlike `projectile`, `hit.pierce` doesn't apply - it stops on its first real hit. `count > 1` releases a pack instead of a single hound: every one in the pack locks the *same* mark (found once, up front - a pack doesn't split onto different targets), launched fanned across `spread_degrees` the same way `projectile`'s volley works, then each independently converges on that shared mark. See `skills/world_trigger.yml`'s `hound` skill.
+
+### deploy / detonate
+```yaml
+- type: deploy
+  tag: hound_mark             # required - the matching `detonate` references this same string
+  anchor: cursor               # self | cursor, default cursor
+  range: 20                    # cursor only
+  lifetime_ticks: 200          # default 200. 0 or negative = never expires on its own, waits for detonate indefinitely
+  marker_particle: SOUL        # optional ambient loop at the marker while armed
+  marker_interval_ticks: 10
+  marker_count: 3
+  on_deploy:                   # optional - any effect list, fires once immediately, targeting the caster
+    - type: particle
+      particle: SMOKE
+      count: 10
+
+- type: detonate
+  tag: hound_mark
+  radius: 4                    # who gets hit, centered on the marker's location
+  particle: FLAME               # optional burst at the marker's location
+  particle_count: 40
+  effects:                      # required - applied to everything within radius
+    - type: damage
+      amount: 20
+```
+The "arm it now, trigger it on a separate later cast" pair - a Hound left clinging somewhere before you set it off, an Asteroid called down and held before you drop it, a construct that goes up now and comes down on command. `deploy` remembers a Location under the caster + `tag`; a later `detonate` with the *same tag* consumes it - plays its own burst, then applies its own `effects:` to whatever's within `radius` of that spot - and removes the marker so it can't be triggered twice. Neither effect needs to know what the other's payload looks like; only the tag string has to match, so a `deploy`-only skill and a `detonate`-only skill (bound to two different casts/items/triggers) are enough to build the full "place, then trigger" flow. A `detonate` with nothing armed under its tag just fizzles - no error, no effects fired. Re-`deploy`-ing the same tag before it's detonated replaces the old marker (and restarts its timeout) rather than stacking a second one. See `skills/world_trigger.yml`'s `hound_deploy` / `hound_detonate` pair.
 
 ### summon
 ```yaml
@@ -655,10 +688,13 @@ Chains stages of effects with delays between them.
   particle: DUST
   dust_color: {r: 120, g: 170, b: 255}   # DUST only
   dust_size: 1.0                          # DUST only
-  landing_particle: CLOUD    # burst drawn where a drop hits terrain, even if it never touched an entity - defaults to reusing `particle` if omitted
-  landing_dust_color: {r: 120, g: 170, b: 255}   # landing_particle: DUST only, defaults to dust_color if omitted
-  landing_dust_size: 1.0                          # landing_particle: DUST only, defaults to dust_size if omitted
-  landing_particle_count: 10
+  landing_particles:          # stack as many as you want, all spawn together on landing
+    - particle: CLOUD
+      count: 10
+    - particle: DUST
+      dust_color: {r: 120, g: 170, b: 255}
+      dust_size: 1.0
+      count: 6
   stagger_ticks: {min: 0, max: 20}   # random per-drop delay before it starts falling - burst mode only (see below), ignored if duration_ticks is set
   duration_ticks: 0        # if >0, switches to storm mode: drops keep spawning throughout this whole window instead of one clustered burst. default 0 (burst mode)
   drops_per_second: 2      # storm mode only, used when `count` isn't set - total drops = drops_per_second * (duration_ticks / 20)
@@ -674,7 +710,9 @@ Two modes, chosen by whether `duration_ticks` is set:
 - **burst** (default, `duration_ticks: 0`): `count` drops (default 10), each launching at a random point inside one short `stagger_ticks` window. Good for a quick, punchy volley.
 - **storm** (`duration_ticks > 0`): drops keep spawning across the *entire* `duration_ticks` window instead of one clustered burst - `stagger_ticks` is ignored (`duration_ticks` replaces it as the spawn window). Total count is either explicit (`count`) or derived from `drops_per_second * duration`, so you can say "rain for 5 seconds" without hand-tuning a count/window pair to fit.
 
-`count` independent drops, each scattered to a random point within `radius` of the anchor (uniform across the disk's *area*, not bunched toward the center), spawned `height` blocks up, and falling straight down. Each drop is its own miniature simulated projectile: own trail particle, own block-collision check (raytraced across each tick's fall distance, `ignorePassableBlocks: false` - so it stops on stairs/slabs/fences too, not just full blocks), own small `hit_radius` + `on_hit` payload, capped to `hit_once` per entity same as `shape`/`projectile`. A drop that only ever grazes terrain and never touches an entity still draws a `landing_particle` burst where it hit - `on_hit` only fires against entities, so without this a drop that misses everything used to just vanish with no feedback at all.
+`count` independent drops, each scattered to a random point within `radius` of the anchor (uniform across the disk's *area*, not bunched toward the center), spawned `height` blocks up, and falling straight down. Each drop is its own miniature simulated projectile: own trail particle, own block-collision check (raytraced across each tick's fall distance, `ignorePassableBlocks: false` - so it stops on stairs/slabs/fences too, not just full blocks), own small `hit_radius` + `on_hit` payload, capped to `hit_once` per entity same as `shape`/`projectile`. A drop that only ever grazes terrain and never touches an entity still draws a landing burst where it hit - `on_hit` only fires against entities, so without this a drop that misses everything used to just vanish with no feedback at all.
+
+`landing_particles` is a list, not a single particle - every entry spawns together at the same landing point, the same way `shape`'s `layers:` stack several particle types into one visual instead of being limited to one (a `CLOUD` puff plus a colored `DUST` sparkle on the same landing, say). The old single-particle fields (`landing_particle`, `landing_dust_color`, `landing_dust_size`, `landing_particle_count`) still work unchanged if `landing_particles` is absent - existing configs don't need to change. Omit `landing_particles` and every old field too, while still setting `particle`, and it falls back to one burst reusing the trail particle, same default as always. Omit all of them (including `particle`) for no landing burst at all.
 
 - `anchor: self` centers the scatter on the caster's own location. `anchor: cursor` raytraces the caster's crosshair up to `range` and centers on whatever that hits (block or open air at max range), resolved fresh each time. `anchor: cursor_locked` does the same raytrace, but shares `shape`'s own cursor-lock cache on the SkillContext - if an earlier `sequence` step used a `cursor_locked` shape (e.g. a telegraph ring), this reuses that *exact* resolved point instead of raytracing the crosshair again a moment later, which would drift apart if the caster moved or turned in between steps. Deliberately not named `target` - `shape`'s own `target` anchor means something different (the first entity from the skill's *targeter*, not a raytraced point); reusing that name here for a raytrace would silently anchor `rain` and a `shape` to two unrelated things any time the skill's targeter isn't also crosshair-based.
 - `hit:` follows the same nested-block-with-flat-key-fallback convention as `shape`/`projectile` (`hit.radius`/`hit_radius`, `hit.once`/`hit_once`, `hit.debug`/`debug_hitbox`, `hit.effects`/`on_hit`). `debug_hitbox` draws the same red `DUST` wireframe-sphere convention `shape` uses, redrawn every tick around each drop's current position - since each drop is its own independent falling point rather than one shared shape, there's no `debug_hitbox_points` count to tune here; it's fixed.
