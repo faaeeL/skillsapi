@@ -57,10 +57,13 @@ import java.util.stream.Collectors;
  *     particle: DUST
  *     dust_color: {r: 120, g: 170, b: 255}
  *     dust_size: 1.0
- *     landing_particle: CLOUD    # burst drawn where a drop hits terrain, even if it never touched an entity - defaults to reusing `particle` above if omitted; set explicitly to null/leave `particle` unset for no landing burst at all
- *     landing_dust_color: {r: 120, g: 170, b: 255}   # landing_particle: DUST only - defaults to dust_color above if omitted
- *     landing_dust_size: 1.0                          # landing_particle: DUST only
- *     landing_particle_count: 10
+ *     landing_particles:          # stack as many as you want, all spawn together on landing
+ *       - particle: CLOUD
+ *         count: 10
+ *       - particle: DUST
+ *         dust_color: {r: 120, g: 170, b: 255}
+ *         dust_size: 1.0
+ *         count: 6
  *     stagger_ticks: {min: 0, max: 20}   # random per-drop delay before it starts falling - burst mode only, ignored if duration_ticks is set
  *     duration_ticks: 0        # if >0, switches to an ongoing-storm mode: drops keep spawning throughout this whole window instead of one clustered burst, and stagger_ticks is ignored. default 0 (burst mode)
  *     drops_per_second: 2      # duration_ticks mode only, used when `count` isn't explicitly set - total drops = drops_per_second * (duration_ticks / 20)
@@ -70,10 +73,23 @@ import java.util.stream.Collectors;
  *       effects:
  *         - type: damage
  *           amount: 6
+ *
+ * `landing_particles` replaces the old single `landing_particle` /
+ * `landing_dust_color` / `landing_dust_size` / `landing_particle_count`
+ * fields (still read if `landing_particles` is absent, for old configs) -
+ * each entry in the list is spawned together at the same landing point, the
+ * same way a `shape`'s `layers:` stack several particle types into one
+ * visual instead of being limited to one. Omit `landing_particles`
+ * entirely (and the old flat fields) for no landing burst at all; leave
+ * both absent and `particle` set to fall back to one burst reusing the
+ * trail particle, same default as before.
  */
 public class RainEffect implements SkillEffect {
 
     public enum Anchor { SELF, CURSOR, CURSOR_LOCKED }
+
+    /** One particle type spawned at the landing point - stack several of these for a mixed burst. */
+    public record LandingBurst(Particle particle, Particle.DustOptions dust, int count) {}
 
     private final Plugin plugin;
     private final Anchor anchor;
@@ -87,9 +103,7 @@ public class RainEffect implements SkillEffect {
     private final boolean collideWithBlocks;
     private final Particle trailParticle;
     private final Particle.DustOptions dustOptions;
-    private final Particle landingParticle;
-    private final Particle.DustOptions landingDustOptions;
-    private final int landingParticleCount;
+    private final List<LandingBurst> landingBursts;
     private final int staggerMinTicks;
     private final int staggerMaxTicks;
     private final int durationTicks;
@@ -102,7 +116,7 @@ public class RainEffect implements SkillEffect {
                        double radius, double height,
                        double speedBlocksPerSecond, boolean gravity, boolean collideWithBlocks,
                        Particle trailParticle, Color dustColor, float dustSize,
-                       Particle landingParticle, Color landingDustColor, float landingDustSize, int landingParticleCount,
+                       List<LandingBurst> landingBursts,
                        int staggerMinTicks, int staggerMaxTicks, int durationTicks,
                        double hitRadius, boolean hitOnce, boolean debugHitbox, List<SkillEffect> onHitEffects) {
         this.plugin = plugin;
@@ -118,15 +132,7 @@ public class RainEffect implements SkillEffect {
         this.trailParticle = trailParticle;
         this.dustOptions = (trailParticle == Particle.DUST && dustColor != null)
                 ? new Particle.DustOptions(dustColor, dustSize) : null;
-        // No landing_particle configured -> falls back to reusing the trail
-        // particle for the burst rather than defaulting to nothing, so
-        // landing feedback is on by default the moment there's *any* trail
-        // particle, without needing a second particle type spelled out.
-        this.landingParticle = landingParticle != null ? landingParticle : trailParticle;
-        this.landingDustOptions = (this.landingParticle == Particle.DUST)
-                ? (landingDustColor != null ? new Particle.DustOptions(landingDustColor, landingDustSize) : dustOptions)
-                : null;
-        this.landingParticleCount = landingParticleCount;
+        this.landingBursts = landingBursts;
         this.staggerMinTicks = Math.max(0, staggerMinTicks);
         this.staggerMaxTicks = Math.max(this.staggerMinTicks, staggerMaxTicks);
         this.durationTicks = Math.max(0, durationTicks);
@@ -207,12 +213,14 @@ public class RainEffect implements SkillEffect {
                         // entities, so most drops (the ones that miss)
                         // never triggered anything visible on landing. This
                         // marks the spot even when nothing got hit.
-                        if (landingParticle != null && hit.getHitPosition() != null) {
+                        if (!landingBursts.isEmpty() && hit.getHitPosition() != null) {
                             Location landing = hit.getHitPosition().toLocation(current.getWorld());
-                            if (landingDustOptions != null) {
-                                landing.getWorld().spawnParticle(landingParticle, landing, landingParticleCount, 0.15, 0.05, 0.15, 0, landingDustOptions);
-                            } else {
-                                landing.getWorld().spawnParticle(landingParticle, landing, landingParticleCount, 0.15, 0.05, 0.15, 0.02);
+                            for (LandingBurst burst : landingBursts) {
+                                if (burst.dust() != null) {
+                                    landing.getWorld().spawnParticle(burst.particle(), landing, burst.count(), 0.15, 0.05, 0.15, 0, burst.dust());
+                                } else {
+                                    landing.getWorld().spawnParticle(burst.particle(), landing, burst.count(), 0.15, 0.05, 0.15, 0.02);
+                                }
                             }
                         }
                         cancel();
