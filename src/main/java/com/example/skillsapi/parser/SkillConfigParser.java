@@ -3,6 +3,7 @@ package com.example.skillsapi.parser;
 import com.example.skillsapi.condition.HealthThresholdCondition;
 import com.example.skillsapi.condition.ResourceCostCondition;
 import com.example.skillsapi.effect.*;
+import com.example.skillsapi.deploy.DeployManager;
 import com.example.skillsapi.resource.ResourceManager;
 import com.example.skillsapi.shape.ShapeGenerator;
 import com.example.skillsapi.shape.ShapeLayer;
@@ -56,7 +57,7 @@ public class SkillConfigParser {
      * filename) - doesn't affect parsing.
      */
     public static void loadStatuses(ConfigurationSection statusesSection, StatusManager statusManager,
-                                     SummonManager summonManager, ThreatManager threatManager, Plugin plugin, String sourceLabel) {
+                                     SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager, Plugin plugin, String sourceLabel) {
         if (statusesSection == null) return;
 
         for (String id : statusesSection.getKeys(false)) {
@@ -67,7 +68,7 @@ public class SkillConfigParser {
                         + "' overwrites one already defined in another file.");
             }
             try {
-                statusManager.registerDefinition(id, parseStatus(section.getValues(false), id, plugin, statusManager, summonManager, threatManager));
+                statusManager.registerDefinition(id, parseStatus(section.getValues(false), id, plugin, statusManager, summonManager, threatManager, deployManager));
             } catch (Exception e) {
                 throw new IllegalArgumentException("[" + sourceLabel + "] status '" + id + "': " + e.getMessage(), e);
             }
@@ -77,7 +78,7 @@ public class SkillConfigParser {
     /** Registers every skill in one file's `skills:` section. See loadStatuses for why statuses are a separate, earlier pass. */
     public static void loadSkills(ConfigurationSection skillsSection, SkillManager manager,
                                    ResourceManager resourceManager, Plugin plugin, StatusManager statusManager,
-                                   SummonManager summonManager, ThreatManager threatManager, String sourceLabel) {
+                                   SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager, String sourceLabel) {
         if (skillsSection == null) return;
 
         for (String id : skillsSection.getKeys(false)) {
@@ -88,7 +89,7 @@ public class SkillConfigParser {
                         + "' overwrites one already defined in another file.");
             }
             try {
-                manager.register(parseSkill(id, section, resourceManager, plugin, statusManager, summonManager, threatManager));
+                manager.register(parseSkill(id, section, resourceManager, plugin, statusManager, summonManager, threatManager, deployManager));
             } catch (Exception e) {
                 throw new IllegalArgumentException("[" + sourceLabel + "] skill '" + id + "': " + e.getMessage(), e);
             }
@@ -96,7 +97,7 @@ public class SkillConfigParser {
     }
 
     private static Skill parseSkill(String id, ConfigurationSection section, ResourceManager resourceManager,
-                                     Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+                                     Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         long cooldown = section.getLong("cooldown", 0);
         Targeter targeter = parseTargeter(section);
         Skill skill = new Skill(id, targeter, cooldown);
@@ -114,7 +115,7 @@ public class SkillConfigParser {
                     : null;
             List<SkillEffect> telegraphOnStart = new ArrayList<>();
             for (Map<?, ?> onStartRaw : telegraphSection.getMapList("on_start")) {
-                SkillEffect effect = parseEffect(onStartRaw, plugin, statusManager, summonManager, threatManager);
+                SkillEffect effect = parseEffect(onStartRaw, plugin, statusManager, summonManager, threatManager, deployManager);
                 if (effect != null) telegraphOnStart.add(effect);
             }
 
@@ -144,7 +145,7 @@ public class SkillConfigParser {
 
         List<Map<?, ?>> effectMaps = section.getMapList("effects");
         for (Map<?, ?> raw : effectMaps) {
-            SkillEffect effect = parseEffect(raw, plugin, statusManager, summonManager, threatManager);
+            SkillEffect effect = parseEffect(raw, plugin, statusManager, summonManager, threatManager, deployManager);
             if (effect != null) skill.addEffect(effect);
         }
 
@@ -161,7 +162,7 @@ public class SkillConfigParser {
         };
     }
 
-    private static SkillEffect parseEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static SkillEffect parseEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         Object typeObj = raw.get("type");
         if (typeObj == null) return null;
 
@@ -195,16 +196,18 @@ public class SkillConfigParser {
                     toInt(raw.get("duration_ticks"), 100)
             );
             case "knockback" -> new KnockbackEffect(toDouble(raw.get("strength"), 1));
-            case "status" -> parseStatusEffect(raw, plugin, statusManager, summonManager, threatManager);
-            case "projectile" -> parseProjectile(raw, plugin, statusManager, summonManager, threatManager);
-            case "hound" -> parseHound(raw, plugin, statusManager, summonManager, threatManager);
-            case "shape" -> parseShapeEffect(raw, plugin, statusManager, summonManager, threatManager);
-            case "sequence" -> parseSequenceEffect(raw, plugin, statusManager, summonManager, threatManager);
-            case "summon" -> parseSummon(raw, plugin, statusManager, summonManager, threatManager);
+            case "status" -> parseStatusEffect(raw, plugin, statusManager, summonManager, threatManager, deployManager);
+            case "projectile" -> parseProjectile(raw, plugin, statusManager, summonManager, threatManager, deployManager);
+            case "hound" -> parseHound(raw, plugin, statusManager, summonManager, threatManager, deployManager);
+            case "shape" -> parseShapeEffect(raw, plugin, statusManager, summonManager, threatManager, deployManager);
+            case "sequence" -> parseSequenceEffect(raw, plugin, statusManager, summonManager, threatManager, deployManager);
+            case "summon" -> parseSummon(raw, plugin, statusManager, summonManager, threatManager, deployManager);
             case "dismiss_summons" -> new DismissSummonsEffect(summonManager);
             case "taunt" -> new TauntEffect(threatManager, toDouble(raw.get("amount"), 1000));
-            case "rain" -> parseRainEffect(raw, plugin, statusManager, summonManager, threatManager);
-            case "chain" -> parseChainEffect(raw, plugin, statusManager, summonManager, threatManager);
+            case "rain" -> parseRainEffect(raw, plugin, statusManager, summonManager, threatManager, deployManager);
+            case "chain" -> parseChainEffect(raw, plugin, statusManager, summonManager, threatManager, deployManager);
+            case "deploy" -> parseDeploy(raw, plugin, statusManager, summonManager, threatManager, deployManager);
+            case "detonate" -> parseDetonate(raw, plugin, statusManager, summonManager, threatManager, deployManager);
             default -> null;
         };
     }
@@ -214,8 +217,8 @@ public class SkillConfigParser {
      * jumps to the next-nearest unhit entity - see ChainEffect's own doc
      * comment for the full field list/semantics.
      */
-    private static SkillEffect parseChainEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
-        List<SkillEffect> effects = parseEffectList(asMapList(raw.get("effects")), plugin, statusManager, summonManager, threatManager);
+    private static SkillEffect parseChainEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
+        List<SkillEffect> effects = parseEffectList(asMapList(raw.get("effects")), plugin, statusManager, summonManager, threatManager, deployManager);
         return new ChainEffect(
                 plugin,
                 toInt(raw.get("bounces"), 3),
@@ -228,13 +231,79 @@ public class SkillConfigParser {
     }
 
     /**
+     * skills.yml:
+     *   - type: deploy
+     *     tag: hound_mark
+     *     anchor: cursor          # self | cursor, default cursor
+     *     range: 20
+     *     lifetime_ticks: 200     # 0/negative = never expires on its own
+     *     marker_particle: SOUL
+     *     marker_interval_ticks: 10
+     *     marker_count: 3
+     *     on_deploy: [...]
+     *
+     * See DeployEffect's own doc comment for the full field list/semantics.
+     */
+    private static SkillEffect parseDeploy(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
+        Object tagObj = raw.get("tag");
+        if (tagObj == null) {
+            throw new IllegalArgumentException("A 'deploy' effect needs a 'tag' - the matching 'detonate' references the same string.");
+        }
+        boolean anchorCursor = !"self".equalsIgnoreCase(raw.get("anchor") == null ? "cursor" : raw.get("anchor").toString());
+        Particle markerParticle = raw.get("marker_particle") != null ? Particle.valueOf(raw.get("marker_particle").toString()) : null;
+        List<SkillEffect> onDeploy = parseEffectList(asMapList(raw.get("on_deploy")), plugin, statusManager, summonManager, threatManager, deployManager);
+
+        return new DeployEffect(
+                plugin,
+                deployManager,
+                tagObj.toString(),
+                anchorCursor,
+                toDouble(raw.get("range"), 20),
+                toInt(raw.get("lifetime_ticks"), 200),
+                markerParticle,
+                toInt(raw.get("marker_interval_ticks"), 10),
+                toInt(raw.get("marker_count"), 3),
+                onDeploy
+        );
+    }
+
+    /**
+     * skills.yml:
+     *   - type: detonate
+     *     tag: hound_mark
+     *     radius: 4
+     *     particle: FLAME
+     *     particle_count: 40
+     *     effects: [ ... ]        # required
+     *
+     * See DetonateEffect's own doc comment for the full field list/semantics.
+     */
+    private static SkillEffect parseDetonate(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
+        Object tagObj = raw.get("tag");
+        if (tagObj == null) {
+            throw new IllegalArgumentException("A 'detonate' effect needs a 'tag' - matching whatever 'deploy' armed it.");
+        }
+        Particle burstParticle = raw.get("particle") != null ? Particle.valueOf(raw.get("particle").toString()) : null;
+        List<SkillEffect> effects = parseEffectList(asMapList(raw.get("effects")), plugin, statusManager, summonManager, threatManager, deployManager);
+
+        return new DetonateEffect(
+                deployManager,
+                tagObj.toString(),
+                toDouble(raw.get("radius"), 4),
+                burstParticle,
+                toInt(raw.get("particle_count"), 40),
+                effects
+        );
+    }
+
+    /**
      * Parses a `rain` effect: `count` independently-falling drops scattered
      * within `radius` of an anchor, each on its own random stagger delay -
      * see RainEffect's own doc comment for the full field list/semantics.
      * Follows the same nested-`hit:`-with-flat-fallback convention as
      * `shape`/`projectile` for its hit config.
      */
-    private static SkillEffect parseRainEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static SkillEffect parseRainEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         RainEffect.Anchor anchor = switch (raw.get("anchor") == null ? "cursor" : raw.get("anchor").toString().toLowerCase(Locale.ROOT)) {
             case "self" -> RainEffect.Anchor.SELF;
             case "cursor_locked" -> RainEffect.Anchor.CURSOR_LOCKED;
@@ -252,17 +321,50 @@ public class SkillConfigParser {
         }
         float dustSize = (float) toDouble(raw.get("dust_size"), 1.0);
 
-        Particle landingParticle = raw.get("landing_particle") != null ? Particle.valueOf(raw.get("landing_particle").toString()) : null;
-        Color landingDustColor = null;
-        if (raw.get("landing_dust_color") instanceof Map<?, ?> landingColorRaw) {
-            landingDustColor = Color.fromRGB(
-                    clampByte(toInt(landingColorRaw.get("r"), 255)),
-                    clampByte(toInt(landingColorRaw.get("g"), 255)),
-                    clampByte(toInt(landingColorRaw.get("b"), 255))
-            );
+        List<RainEffect.LandingBurst> landingBursts = new ArrayList<>();
+        if (raw.get("landing_particles") instanceof List<?> landingList) {
+            for (Object entryObj : landingList) {
+                if (!(entryObj instanceof Map<?, ?> entryRaw) || entryRaw.get("particle") == null) continue;
+                Particle burstParticle = Particle.valueOf(entryRaw.get("particle").toString());
+                Particle.DustOptions burstDust = null;
+                if (burstParticle == Particle.DUST) {
+                    Color burstColor = dustColor;
+                    if (entryRaw.get("dust_color") instanceof Map<?, ?> burstColorRaw) {
+                        burstColor = Color.fromRGB(
+                                clampByte(toInt(burstColorRaw.get("r"), 255)),
+                                clampByte(toInt(burstColorRaw.get("g"), 255)),
+                                clampByte(toInt(burstColorRaw.get("b"), 255))
+                        );
+                    }
+                    if (burstColor != null) {
+                        burstDust = new Particle.DustOptions(burstColor, (float) toDouble(entryRaw.get("dust_size"), dustSize));
+                    }
+                }
+                landingBursts.add(new RainEffect.LandingBurst(burstParticle, burstDust, toInt(entryRaw.get("count"), 10)));
+            }
+        } else if (raw.get("landing_particle") != null) {
+            // Old single-particle style - still supported.
+            Particle landingParticle = Particle.valueOf(raw.get("landing_particle").toString());
+            Particle.DustOptions landingDust = null;
+            if (landingParticle == Particle.DUST) {
+                Color landingDustColor = dustColor;
+                if (raw.get("landing_dust_color") instanceof Map<?, ?> landingColorRaw) {
+                    landingDustColor = Color.fromRGB(
+                            clampByte(toInt(landingColorRaw.get("r"), 255)),
+                            clampByte(toInt(landingColorRaw.get("g"), 255)),
+                            clampByte(toInt(landingColorRaw.get("b"), 255))
+                    );
+                }
+                if (landingDustColor != null) {
+                    landingDust = new Particle.DustOptions(landingDustColor, (float) toDouble(raw.get("landing_dust_size"), dustSize));
+                }
+            }
+            landingBursts.add(new RainEffect.LandingBurst(landingParticle, landingDust, toInt(raw.get("landing_particle_count"), 10)));
+        } else if (trailParticle != null) {
+            // Nothing landing-specific configured at all -> reuse the trail
+            // particle for the burst, same default as before.
+            landingBursts.add(new RainEffect.LandingBurst(trailParticle, dustOptionsFor(trailParticle, dustColor, dustSize), toInt(raw.get("landing_particle_count"), 10)));
         }
-        float landingDustSize = (float) toDouble(raw.get("landing_dust_size"), dustSize);
-        int landingParticleCount = toInt(raw.get("landing_particle_count"), 10);
 
         int staggerMin = 0, staggerMax = 0;
         if (raw.get("stagger_ticks") instanceof Map<?, ?> staggerRaw) {
@@ -284,7 +386,7 @@ public class SkillConfigParser {
         boolean hitOnce = toBool(hitRaw != null && hitRaw.get("once") != null ? hitRaw.get("once") : raw.get("hit_once"), true);
         boolean debugHitbox = toBool(hitRaw != null && hitRaw.get("debug") != null ? hitRaw.get("debug") : raw.get("debug_hitbox"), false);
         Object onHitSource = hitRaw != null && hitRaw.get("effects") != null ? hitRaw.get("effects") : raw.get("on_hit");
-        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager);
+        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager, deployManager);
 
         return new RainEffect(
                 plugin,
@@ -300,10 +402,7 @@ public class SkillConfigParser {
                 trailParticle,
                 dustColor,
                 dustSize,
-                landingParticle,
-                landingDustColor,
-                landingDustSize,
-                landingParticleCount,
+                landingBursts,
                 staggerMin,
                 staggerMax,
                 durationTicks,
@@ -342,13 +441,13 @@ public class SkillConfigParser {
      * Set `wait_for_shape_duration: false` on a step to fire the next step
      * immediately (0 delay) despite that step containing a shape.
      */
-    private static SkillEffect parseSequenceEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static SkillEffect parseSequenceEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         List<SequenceEffect.Step> steps = new ArrayList<>();
         for (Map<?, ?> stepRaw : asMapList(raw.get("steps"))) {
             List<SkillEffect> stepEffects = new ArrayList<>();
             Integer shapeDuration = null;
             for (Map<?, ?> effectRaw : asMapList(stepRaw.get("effects"))) {
-                SkillEffect effect = parseEffect(effectRaw, plugin, statusManager, summonManager, threatManager);
+                SkillEffect effect = parseEffect(effectRaw, plugin, statusManager, summonManager, threatManager, deployManager);
                 if (effect != null) stepEffects.add(effect);
                 if ("shape".equalsIgnoreCase(String.valueOf(effectRaw.get("type")))) {
                     shapeDuration = toInt(effectRaw.get("duration_ticks"), 40);
@@ -400,7 +499,7 @@ public class SkillConfigParser {
      *         particle: SOUL_FIRE_FLAME
      *         rotate_deg_per_sec: 180
      */
-    private static SkillEffect parseShapeEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static SkillEffect parseShapeEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         ShapeEffect.Anchor anchor = switch (raw.get("anchor") == null ? "self" : raw.get("anchor").toString().toLowerCase(Locale.ROOT)) {
             case "self_fixed" -> ShapeEffect.Anchor.SELF_FIXED;
             case "target" -> ShapeEffect.Anchor.TARGET;
@@ -465,7 +564,7 @@ public class SkillConfigParser {
         boolean disarmAfterHit = toBool(hitRaw != null && hitRaw.get("disarm") != null ? hitRaw.get("disarm") : raw.get("disarm_after_hit"), false);
 
         Object onHitSource = hitRaw != null && hitRaw.get("effects") != null ? hitRaw.get("effects") : raw.get("on_hit");
-        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager);
+        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager, deployManager);
 
         List<ShapeLayer> layers = new ArrayList<>();
         for (Map<?, ?> layerRaw : asMapList(raw.get("layers"))) {
@@ -607,6 +706,10 @@ public class SkillConfigParser {
         return Math.max(0, Math.min(255, v));
     }
 
+    private static Particle.DustOptions dustOptionsFor(Particle particle, Color color, float size) {
+        return (particle == Particle.DUST && color != null) ? new Particle.DustOptions(color, size) : null;
+    }
+
     /**
      * skills.yml:
      *   - type: status
@@ -631,11 +734,11 @@ public class SkillConfigParser {
      * `on_hit:` naturally targets whatever it actually hit (e.g. an ice
      * bolt inflicting frozen on impact).
      */
-    private static SkillEffect parseStatusEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static SkillEffect parseStatusEffect(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         if (raw.get("behavior") != null) {
             String fallbackId = raw.get("status") != null ? raw.get("status").toString()
                     : raw.get("behavior").toString();
-            return new StatusEffect(statusManager, parseStatus(raw, fallbackId, plugin, statusManager, summonManager, threatManager));
+            return new StatusEffect(statusManager, parseStatus(raw, fallbackId, plugin, statusManager, summonManager, threatManager, deployManager));
         }
 
         Object refObj = raw.get("status");
@@ -653,7 +756,7 @@ public class SkillConfigParser {
     }
 
     /** Shared by both the top-level `statuses:` registry entries and inline `type: status` definitions. */
-    private static Status parseStatus(Map<?, ?> raw, String fallbackId, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static Status parseStatus(Map<?, ?> raw, String fallbackId, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         String id = raw.get("id") != null ? raw.get("id").toString() : fallbackId;
         int durationTicks = toInt(raw.get("duration_ticks"), 100);
         int tickIntervalTicks = toInt(raw.get("tick_interval_ticks"), 4);
@@ -678,16 +781,16 @@ public class SkillConfigParser {
                 tickIntervalTicks,
                 refreshable,
                 behavior,
-                parseEffectList(asMapList(raw.get("on_start")), plugin, statusManager, summonManager, threatManager),
-                parseEffectList(asMapList(raw.get("on_tick")), plugin, statusManager, summonManager, threatManager),
-                parseEffectList(asMapList(raw.get("on_expire")), plugin, statusManager, summonManager, threatManager)
+                parseEffectList(asMapList(raw.get("on_start")), plugin, statusManager, summonManager, threatManager, deployManager),
+                parseEffectList(asMapList(raw.get("on_tick")), plugin, statusManager, summonManager, threatManager, deployManager),
+                parseEffectList(asMapList(raw.get("on_expire")), plugin, statusManager, summonManager, threatManager, deployManager)
         );
     }
 
-    private static List<SkillEffect> parseEffectList(List<Map<?, ?>> rawList, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static List<SkillEffect> parseEffectList(List<Map<?, ?>> rawList, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         List<SkillEffect> result = new ArrayList<>();
         for (Map<?, ?> effectRaw : rawList) {
-            SkillEffect effect = parseEffect(effectRaw, plugin, statusManager, summonManager, threatManager);
+            SkillEffect effect = parseEffect(effectRaw, plugin, statusManager, summonManager, threatManager, deployManager);
             if (effect != null) result.add(effect);
         }
         return result;
@@ -699,7 +802,7 @@ public class SkillConfigParser {
      * another projectile) and applied to whatever the projectile hits,
      * rather than to context.getTargets() the way a normal effect would.
      */
-    private static SkillEffect parseProjectile(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static SkillEffect parseProjectile(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         Particle particle = raw.get("particle") != null
                 ? Particle.valueOf(raw.get("particle").toString())
                 : null;
@@ -711,7 +814,7 @@ public class SkillConfigParser {
         Map<?, ?> hitRaw = raw.get("hit") instanceof Map<?, ?> m ? m : null;
 
         Object onHitSource = hitRaw != null && hitRaw.get("effects") != null ? hitRaw.get("effects") : raw.get("effects");
-        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager);
+        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager, deployManager);
 
         double hitRadius = toDouble(hitRaw != null && hitRaw.get("radius") != null ? hitRaw.get("radius") : raw.get("hit_radius"), 1.0);
         int pierce = toInt(hitRaw != null && hitRaw.get("pierce") != null ? hitRaw.get("pierce") : raw.get("pierce"), 1);
@@ -725,6 +828,8 @@ public class SkillConfigParser {
                 pierce,
                 toBool(raw.get("gravity"), false),
                 toBool(raw.get("collide_with_blocks"), true),
+                toInt(raw.get("count"), 1),
+                toDouble(raw.get("spread_degrees"), 0),
                 onHit
         );
     }
@@ -746,14 +851,14 @@ public class SkillConfigParser {
      * work, and why the turn-rate limit is what keeps it dodgeable instead
      * of a guaranteed hit.
      */
-    private static SkillEffect parseHound(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static SkillEffect parseHound(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         Particle particle = raw.get("particle") != null
                 ? Particle.valueOf(raw.get("particle").toString())
                 : null;
 
         Map<?, ?> hitRaw = raw.get("hit") instanceof Map<?, ?> m ? m : null;
         Object onHitSource = hitRaw != null && hitRaw.get("effects") != null ? hitRaw.get("effects") : raw.get("effects");
-        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager);
+        List<SkillEffect> onHit = parseEffectList(asMapList(onHitSource), plugin, statusManager, summonManager, threatManager, deployManager);
         double hitRadius = toDouble(hitRaw != null && hitRaw.get("radius") != null ? hitRaw.get("radius") : raw.get("hit_radius"), 1.0);
 
         return new HoundProjectileEffect(
@@ -765,6 +870,8 @@ public class SkillConfigParser {
                 toDouble(raw.get("lock_radius"), 20),
                 toDouble(raw.get("turn_degrees_per_tick"), 6),
                 toBool(raw.get("collide_with_blocks"), true),
+                toInt(raw.get("count"), 1),
+                toDouble(raw.get("spread_degrees"), 0),
                 onHit
         );
     }
@@ -797,7 +904,7 @@ public class SkillConfigParser {
      * lifespan, follow/aggro, and "never attacks its own owner" behavior
      * actually live.
      */
-    private static SkillEffect parseSummon(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager) {
+    private static SkillEffect parseSummon(Map<?, ?> raw, Plugin plugin, StatusManager statusManager, SummonManager summonManager, ThreatManager threatManager, DeployManager deployManager) {
         EntityType entityType = EntityType.valueOf(raw.get("entity").toString().toUpperCase(Locale.ROOT));
 
         Material mainHand = raw.get("main_hand") != null
@@ -821,7 +928,7 @@ public class SkillConfigParser {
         double moveSpeed = toDouble(aiRaw != null && aiRaw.get("move_speed") != null ? aiRaw.get("move_speed") : raw.get("move_speed"), 1.0);
         int aiIntervalTicks = toInt(aiRaw != null && aiRaw.get("interval_ticks") != null ? aiRaw.get("interval_ticks") : raw.get("ai_interval_ticks"), 10);
 
-        List<SkillEffect> onSummon = parseEffectList(asMapList(raw.get("on_summon")), plugin, statusManager, summonManager, threatManager);
+        List<SkillEffect> onSummon = parseEffectList(asMapList(raw.get("on_summon")), plugin, statusManager, summonManager, threatManager, deployManager);
 
         return new SummonEffect(
                 summonManager,
