@@ -2,6 +2,7 @@ package com.example.skillsapi;
 
 import com.example.skillsapi.command.CastCommand;
 import com.example.skillsapi.command.SkillsApiCommand;
+import com.example.skillsapi.deploy.DeployManager;
 import com.example.skillsapi.listener.CastInterruptListener;
 import com.example.skillsapi.listener.MobTriggerListener;
 import com.example.skillsapi.listener.ShieldDamageListener;
@@ -43,6 +44,7 @@ public class SkillsPlugin extends JavaPlugin {
     private CastManager castManager;
     private CastEngine castEngine;
     private StatusManager statusManager;
+    private DeployManager deployManager;
     private SummonManager summonManager;
     private ThreatManager threatManager;
     private MobTemplateManager mobTemplateManager;
@@ -62,6 +64,7 @@ public class SkillsPlugin extends JavaPlugin {
         castEngine = new CastEngine(this, castManager);
         skillManager = new SkillManager();
         statusManager = new StatusManager(this);
+        deployManager = new DeployManager();
         summonManager = new SummonManager(this);
         threatManager = new ThreatManager();
         mobTemplateManager = new MobTemplateManager();
@@ -193,11 +196,11 @@ public class SkillsPlugin extends JavaPlugin {
 
             for (int i = 0; i < files.size(); i++) {
                 SkillConfigParser.loadStatuses(loaded.get(i).getConfigurationSection("statuses"),
-                        statusManager, summonManager, threatManager, this, files.get(i).getName());
+                        statusManager, summonManager, threatManager, deployManager, this, files.get(i).getName());
             }
             for (int i = 0; i < files.size(); i++) {
                 SkillConfigParser.loadSkills(loaded.get(i).getConfigurationSection("skills"), skillManager,
-                        resourceManager, this, statusManager, summonManager, threatManager, files.get(i).getName());
+                        resourceManager, this, statusManager, summonManager, threatManager, deployManager, files.get(i).getName());
             }
 
             List<File> mobFiles = collectYamlFiles(new File(getDataFolder(), "mobs"));
@@ -240,6 +243,10 @@ public class SkillsPlugin extends JavaPlugin {
 
     public StatusManager getStatusManager() {
         return statusManager;
+    }
+
+    public DeployManager getDeployManager() {
+        return deployManager;
     }
 
     public SummonManager getSummonManager() {
