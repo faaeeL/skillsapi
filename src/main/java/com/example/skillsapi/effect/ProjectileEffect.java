@@ -27,6 +27,13 @@ import java.util.stream.Collectors;
  * top-level effects are - so a projectile's payload can be damage +
  * knockback + particles, or even another projectile, or anything else this
  * framework already knows how to do.
+ *
+ * `count` > 1 fires a volley instead of a single bolt: each one is its own
+ * fully independent simulated point (own trail, own pierce budget, own
+ * hits), fanned out horizontally across `spread_degrees` around the
+ * caster's look direction rather than all overlapping on one line. `count`
+ * projectiles evenly split that fan (count: 1 ignores spread_degrees
+ * entirely and fires straight, same as before this field existed).
  */
 public class ProjectileEffect implements SkillEffect {
 
@@ -38,11 +45,14 @@ public class ProjectileEffect implements SkillEffect {
     private final int pierce;
     private final boolean gravity;
     private final boolean collideWithBlocks;
+    private final int count;
+    private final double spreadDegrees;
     private final List<SkillEffect> onHitEffects;
 
     public ProjectileEffect(Plugin plugin, Particle trailParticle, double speedBlocksPerSecond,
                              double maxDistance, double hitRadius, int pierce, boolean gravity,
-                             boolean collideWithBlocks, List<SkillEffect> onHitEffects) {
+                             boolean collideWithBlocks, int count, double spreadDegrees,
+                             List<SkillEffect> onHitEffects) {
         this.plugin = plugin;
         this.trailParticle = trailParticle;
         // ticks are the unit everything actually moves in (20/sec)
@@ -52,6 +62,8 @@ public class ProjectileEffect implements SkillEffect {
         this.pierce = Math.max(1, pierce);
         this.gravity = gravity;
         this.collideWithBlocks = collideWithBlocks;
+        this.count = Math.max(1, count);
+        this.spreadDegrees = spreadDegrees;
         this.onHitEffects = onHitEffects;
     }
 
@@ -59,10 +71,31 @@ public class ProjectileEffect implements SkillEffect {
     public void apply(SkillContext context) {
         LivingEntity caster = context.getCaster();
         Location origin = caster.getEyeLocation();
-        Vector velocity = origin.getDirection().normalize().multiply(speedPerTick);
+        Vector forward = origin.getDirection().normalize();
 
+        for (int i = 0; i < count; i++) {
+            // count: 1 -> angleOffset 0, straight down the look direction.
+            // count: N>1 -> evenly spaced across spread_degrees, centered
+            // on the look direction (e.g. 3 shots / 30 degrees = -15/0/+15).
+            double angleOffset = count == 1 ? 0 : (-spreadDegrees / 2.0) + (spreadDegrees * i / (count - 1));
+            Vector velocity = rotateAroundVerticalAxis(forward, angleOffset).multiply(speedPerTick);
+            launch(caster, context, origin.clone(), velocity);
+        }
+    }
+
+    /** Rotates a direction vector around the world's vertical (Y) axis - a horizontal-only fan, pitch untouched. */
+    private static Vector rotateAroundVerticalAxis(Vector direction, double degrees) {
+        double radians = Math.toRadians(degrees);
+        double cos = Math.cos(radians);
+        double sin = Math.sin(radians);
+        double x = direction.getX() * cos - direction.getZ() * sin;
+        double z = direction.getX() * sin + direction.getZ() * cos;
+        return new Vector(x, direction.getY(), z);
+    }
+
+    private void launch(LivingEntity caster, SkillContext context, Location origin, Vector velocity) {
         new BukkitRunnable() {
-            private final Location current = origin.clone();
+            private final Location current = origin;
             private double travelled = 0;
             private final Set<LivingEntity> alreadyHit = new HashSet<>();
             private int hitsLeft = pierce;
